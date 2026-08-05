@@ -196,8 +196,7 @@ jobs:
       if: env.RUNTIME == 'java'
       working-directory: src/${{ env.SERVICE }}
       run: |
-        mvn clean \
-         -Dgroups=!integration
+        mvn clean package -DskipTests
 
     - name: Download Maven Dependencies
       if: env.RUNTIME == 'java'
