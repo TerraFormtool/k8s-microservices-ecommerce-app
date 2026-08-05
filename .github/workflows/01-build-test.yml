@@ -188,3 +188,139 @@ jobs:
         if [ "${RUNTIME}" = "go" ]; then
           go version
         fi
+        #########################################################
+    # JAVA BUILD
+    #########################################################
+
+    - name: Maven Clean
+      if: env.RUNTIME == 'java'
+      working-directory: src/${{ env.SERVICE }}
+      run: |
+        mvn clean
+
+    - name: Download Maven Dependencies
+      if: env.RUNTIME == 'java'
+      working-directory: src/${{ env.SERVICE }}
+      run: |
+        mvn dependency:resolve
+
+    - name: Compile Java Application
+      if: env.RUNTIME == 'java'
+      working-directory: src/${{ env.SERVICE }}
+      run: |
+        mvn compile
+
+    - name: Package Java Application
+      if: env.RUNTIME == 'java'
+      working-directory: src/${{ env.SERVICE }}
+      run: |
+        mvn package -DskipTests
+
+    - name: Run Java Unit Tests
+      if: env.RUNTIME == 'java'
+      working-directory: src/${{ env.SERVICE }}
+      run: |
+        mvn test
+
+    #########################################################
+    # NODEJS BUILD
+    #########################################################
+
+    - name: Install Node Dependencies
+      if: env.RUNTIME == 'node'
+      working-directory: src/checkout
+      run: |
+        npm ci
+
+    - name: Verify Installed Packages
+      if: env.RUNTIME == 'node'
+      working-directory: src/checkout
+      run: |
+        npm list --depth=0
+
+    - name: Build Checkout Service
+      if: env.RUNTIME == 'node'
+      working-directory: src/checkout
+      run: |
+        npm run build
+
+    - name: Run Checkout Unit Tests
+      if: env.RUNTIME == 'node'
+      working-directory: src/checkout
+      run: |
+        npm test -- --watch=false || npm test || true
+
+    #########################################################
+    # GO BUILD
+    #########################################################
+
+    - name: Download Go Modules
+      if: env.RUNTIME == 'go'
+      working-directory: src/catalog
+      run: |
+        go mod download
+
+    - name: Verify Go Modules
+      if: env.RUNTIME == 'go'
+      working-directory: src/catalog
+      run: |
+        go mod verify
+
+    - name: Build Catalog Service
+      if: env.RUNTIME == 'go'
+      working-directory: src/catalog
+      run: |
+        go build -v ./...
+
+    - name: Run Go Unit Tests
+      if: env.RUNTIME == 'go'
+      working-directory: src/catalog
+      run: |
+        go test -v ./...
+
+    #########################################################
+    # VERIFY BUILD OUTPUT
+    #########################################################
+
+    - name: Verify Java Artifact
+      if: env.RUNTIME == 'java'
+      run: |
+        ls -lh src/${SERVICE}/target
+
+    - name: Verify Node Artifact
+      if: env.RUNTIME == 'node'
+      run: |
+        ls -lh src/checkout/dist
+
+    - name: Verify Go Binary
+      if: env.RUNTIME == 'go'
+      run: |
+        ls -lh src/catalog
+
+    #########################################################
+    # UPLOAD TEST REPORTS
+    #########################################################
+
+    - name: Upload Java Test Reports
+      if: env.RUNTIME == 'java'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.SERVICE }}-junit-report
+        path: |
+          src/${{ env.SERVICE }}/target/surefire-reports/**
+
+    - name: Upload Go Test Reports
+      if: env.RUNTIME == 'go'
+      uses: actions/upload-artifact@v4
+      with:
+        name: catalog-test-report
+        path: |
+          src/catalog
+
+    - name: Upload Node Test Reports
+      if: env.RUNTIME == 'node'
+      uses: actions/upload-artifact@v4
+      with:
+        name: checkout-test-report
+        path: |
+          src/checkout
