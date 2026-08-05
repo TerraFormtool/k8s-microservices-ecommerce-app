@@ -324,3 +324,153 @@ jobs:
         name: checkout-test-report
         path: |
           src/checkout
+     #########################################################
+    # UPLOAD BUILD ARTIFACTS
+    #########################################################
+
+    - name: Upload Java Artifact
+      if: env.RUNTIME == 'java'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.SERVICE }}-jar
+        path: |
+          src/${{ env.SERVICE }}/target/*.jar
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload Node Artifact
+      if: env.RUNTIME == 'node'
+      uses: actions/upload-artifact@v4
+      with:
+        name: checkout-dist
+        path: |
+          src/checkout/dist/**
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload Go Artifact
+      if: env.RUNTIME == 'go'
+      uses: actions/upload-artifact@v4
+      with:
+        name: catalog-binary
+        path: |
+          src/catalog
+        if-no-files-found: warn
+        retention-days: 7
+
+    #########################################################
+    # BUILD INFORMATION
+    #########################################################
+
+    - name: Display Build Files
+      run: |
+
+        echo "======================================"
+
+        if [ "${RUNTIME}" = "java" ]; then
+
+          ls -lh src/${SERVICE}/target
+
+        fi
+
+        if [ "${RUNTIME}" = "node" ]; then
+
+          ls -lh src/checkout/dist
+
+        fi
+
+        if [ "${RUNTIME}" = "go" ]; then
+
+          ls -lh src/catalog
+
+        fi
+
+        echo "======================================"
+
+    #########################################################
+    # GITHUB STEP SUMMARY
+    #########################################################
+
+    - name: Generate Build Summary
+      run: |
+
+        {
+          echo "# Build Summary"
+          echo ""
+          echo "| Property | Value |"
+          echo "|----------|-------|"
+          echo "| Service | ${SERVICE} |"
+          echo "| Runtime | ${RUNTIME} |"
+          echo "| Repository | ${GITHUB_REPOSITORY} |"
+          echo "| Branch | ${GITHUB_REF_NAME} |"
+          echo "| Commit | ${GITHUB_SHA} |"
+          echo "| Runner | ${RUNNER_NAME} |"
+          echo "| Workflow | ${GITHUB_WORKFLOW} |"
+          echo "| Status | SUCCESS |"
+        } >> $GITHUB_STEP_SUMMARY
+
+    #########################################################
+    # VERIFY WORKSPACE
+    #########################################################
+
+    - name: Workspace Information
+      run: |
+
+        echo "Workspace"
+
+        pwd
+
+        echo ""
+
+        echo "Repository Size"
+
+        du -sh .
+
+        echo ""
+
+        echo "Top Level"
+
+        ls -lh
+
+    #########################################################
+    # CLEANUP
+    #########################################################
+
+    - name: Cleanup Workspace
+      if: always()
+      run: |
+
+        echo "Cleaning temporary files..."
+
+        find . -type f -name "*.tmp" -delete || true
+
+        find . -type f -name "*.log" -delete || true
+
+    #########################################################
+    # FINAL BUILD STATUS
+    #########################################################
+
+    - name: Build Successful
+      run: |
+
+        echo ""
+        echo "======================================"
+        echo "BUILD COMPLETED SUCCESSFULLY"
+        echo "======================================"
+        echo "Service      : ${SERVICE}"
+        echo "Runtime      : ${RUNTIME}"
+        echo "Repository   : ${GITHUB_REPOSITORY}"
+        echo "Branch       : ${GITHUB_REF_NAME}"
+        echo "Commit       : ${GITHUB_SHA}"
+        echo "======================================"
+
+    #########################################################
+    # JOB OUTPUTS
+    #########################################################
+
+    - name: Export Outputs
+      id: outputs
+      run: |
+
+        echo "service=${SERVICE}" >> $GITHUB_OUTPUT
+        echo "runtime=${RUNTIME}" >> $GITHUB_OUTPUT
