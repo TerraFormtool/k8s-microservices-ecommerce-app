@@ -1,0 +1,225 @@
+name: CI - Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - cart
+          - orders
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.event.inputs.service }}
+  cancel-in-progress: true
+
+env:
+
+  SERVICE: ${{ github.event.inputs.service }}
+
+jobs:
+
+  integration-test:
+
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+    ############################################################
+
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    ############################################################
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+        cache: maven
+
+    ############################################################
+
+    - name: Verify Java
+      run: |
+
+        java -version
+
+        javac -version
+
+        mvn -version
+
+    ############################################################
+
+    - name: Verify Docker
+
+      run: |
+
+        docker version
+
+        docker info
+
+        docker ps
+
+        docker images
+
+    ############################################################
+
+    - name: Configure Testcontainers
+
+      run: |
+
+        echo "DOCKER_HOST=unix:///var/run/docker.sock" >> $GITHUB_ENV
+
+        echo "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock" >> $GITHUB_ENV
+
+        echo "TESTCONTAINERS_RYUK_DISABLED=true" >> $GITHUB_ENV
+
+    ############################################################
+
+    - name: Display Environment
+
+      run: |
+
+        echo "Service : ${SERVICE}"
+
+        echo "Runner : ${RUNNER_NAME}"
+
+        echo "Docker Socket"
+
+        ls -l /var/run/docker.sock
+        ############################################################
+
+    - name: Run Cart Integration Tests
+
+      if: env.SERVICE == 'cart'
+
+      working-directory: src/cart
+
+      run: |
+
+        mvn clean verify \
+        -Dgroups=integration
+
+    ############################################################
+
+    - name: Run Orders Integration Tests
+
+      if: env.SERVICE == 'orders'
+
+      working-directory: src/orders
+
+      run: |
+
+        mvn clean verify \
+        -Dgroups=integration
+
+    ############################################################
+
+    - name: Upload Surefire Reports
+
+      if: always()
+
+      uses: actions/upload-artifact@v4
+
+      with:
+
+        name: integration-test-reports
+
+        path: |
+
+          src/**/target/surefire-reports
+
+    ############################################################
+
+    - name: Upload Failsafe Reports
+
+      if: always()
+
+      uses: actions/upload-artifact@v4
+
+      with:
+
+        name: failsafe-reports
+
+        path: |
+
+          src/**/target/failsafe-reports
+
+    ############################################################
+
+    - name: Docker Logs
+
+      if: always()
+
+      run: |
+
+        docker ps -a
+
+        docker images
+        ############################################################
+
+    - name: Cleanup Test Containers
+
+      if: always()
+
+      run: |
+
+        docker container prune -f
+
+        docker network prune -f
+
+        docker volume prune -f
+
+    ############################################################
+
+    - name: Generate Summary
+
+      if: always()
+
+      run: |
+
+        {
+
+          echo "# Integration Test Summary"
+
+          echo ""
+
+          echo "|Property|Value|"
+
+          echo "|--------|-----|"
+
+          echo "|Service|${SERVICE}|"
+
+          echo "|Runner|${RUNNER_NAME}|"
+
+          echo "|Docker|PASS|"
+
+          echo "|Integration Tests|Completed|"
+
+        } >> $GITHUB_STEP_SUMMARY
+
+    ############################################################
+
+    - name: Success
+
+      run: |
+
+        echo "=================================="
+
+        echo "Integration Tests Completed"
+
+        echo "Service : ${SERVICE}"
+
+        echo "=================================="
