@@ -1,1 +1,190 @@
+name: CI - Build & Unit Test
 
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - ui
+          - cart
+          - orders
+          - checkout
+          - catalog
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.inputs.service }}
+  cancel-in-progress: true
+
+env:
+  SERVICE: ${{ github.event.inputs.service }}
+
+jobs:
+
+  build-test:
+
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+    #########################################################
+    # Checkout Repository
+    #########################################################
+
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    #########################################################
+    # Display Build Information
+    #########################################################
+
+    - name: Display Build Information
+      run: |
+        echo "======================================="
+        echo "Repository : $GITHUB_REPOSITORY"
+        echo "Branch     : $GITHUB_REF_NAME"
+        echo "Commit      : $GITHUB_SHA"
+        echo "Service     : ${SERVICE}"
+        echo "Runner      : $RUNNER_NAME"
+        echo "======================================="
+
+    #########################################################
+    # Detect Runtime
+    #########################################################
+
+    - name: Detect Runtime
+      run: |
+
+        if [[ "${SERVICE}" == "ui" || \
+              "${SERVICE}" == "cart" || \
+              "${SERVICE}" == "orders" ]]; then
+
+            echo "RUNTIME=java" >> $GITHUB_ENV
+
+        elif [[ "${SERVICE}" == "checkout" ]]; then
+
+            echo "RUNTIME=node" >> $GITHUB_ENV
+
+        elif [[ "${SERVICE}" == "catalog" ]]; then
+
+            echo "RUNTIME=go" >> $GITHUB_ENV
+
+        else
+
+            echo "Unknown Service"
+            exit 1
+
+        fi
+
+    #########################################################
+    # Verify Service Folder
+    #########################################################
+
+    - name: Verify Service Folder
+      run: |
+
+        if [ ! -d src/${SERVICE} ]; then
+            echo "Service folder not found"
+            exit 1
+        fi
+
+    #########################################################
+    # Display Runtime
+    #########################################################
+
+    - name: Display Runtime
+      run: |
+
+        echo "Runtime : ${RUNTIME}"
+
+    #########################################################
+    # Java Setup
+    #########################################################
+
+    - name: Setup Java
+      if: env.RUNTIME == 'java'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+        cache: maven
+
+    #########################################################
+    # Node Setup
+    #########################################################
+
+    - name: Setup NodeJS
+      if: env.RUNTIME == 'node'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: src/checkout/package-lock.json
+
+    #########################################################
+    # Go Setup
+    #########################################################
+
+    - name: Setup Go
+      if: env.RUNTIME == 'go'
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    #########################################################
+    # Restore Maven Cache
+    #########################################################
+
+    - name: Restore Maven Cache
+      if: env.RUNTIME == 'java'
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: maven-${{ runner.os }}-${{ hashFiles(format('src/{0}/pom.xml', env.SERVICE)) }}
+        restore-keys: |
+          maven-${{ runner.os }}
+
+    #########################################################
+    # Restore Go Cache
+    #########################################################
+
+    - name: Restore Go Modules
+      if: env.RUNTIME == 'go'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ hashFiles('src/catalog/go.sum') }}
+        restore-keys: |
+          go-${{ runner.os }}
+
+    #########################################################
+    # Display Tool Versions
+    #########################################################
+
+    - name: Display Tool Versions
+      run: |
+
+        if [ "${RUNTIME}" = "java" ]; then
+          java -version
+          mvn -version
+        fi
+
+        if [ "${RUNTIME}" = "node" ]; then
+          node --version
+          npm --version
+        fi
+
+        if [ "${RUNTIME}" = "go" ]; then
+          go version
+        fi
