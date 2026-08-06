@@ -308,7 +308,7 @@ jobs:
         working-directory: src/${{ env.SERVICE }}
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-         run: |
+        run: |
            mkdir -p "${GITHUB_WORKSPACE}/reports"
 
            CMD="dependency-check.sh \
