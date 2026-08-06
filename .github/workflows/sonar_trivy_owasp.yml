@@ -308,7 +308,7 @@ jobs:
         run: |
           echo "Running OWASP Dependency Check..."
 
-          dependency-check.sh \
+          /opt/dependency-check/bin/dependency-check.sh  \
           --project "${{ env.SERVICE }}" \
           --scan . \
           --format HTML \
