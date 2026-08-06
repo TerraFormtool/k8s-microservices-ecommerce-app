@@ -293,3 +293,98 @@ jobs:
       #    curl -v \
       #    -u "${SONAR_TOKEN}:" \
       #    "$URL"
+  #########################################################
+  # CREATE REPORT DIRECTORY
+  #########################################################
+      - name: Create Report Directory
+        run: |
+          mkdir -p reports
+
+  #########################################################
+  # OWASP DEPENDENCY CHECK
+  #########################################################
+      - name: OWASP Dependency Check
+        working-directory: src/${{ env.SERVICE }}
+        run: |
+          echo "Running OWASP Dependency Check..."
+
+          dependency-check.sh \
+          --project "${{ env.SERVICE }}" \
+          --scan . \
+          --format HTML \
+          --format JSON \
+          --out "${GITHUB_WORKSPACE}/reports" \
+          --noupdate
+
+  #########################################################
+  # VERIFY OWASP REPORT
+  #########################################################
+      - name: Verify OWASP Report
+        run: |
+          echo "===== OWASP Reports ====="
+          ls -lh reports
+
+  #########################################################
+  # TRIVY FILESYSTEM SCAN
+  #########################################################
+      - name: Trivy Vulnerability Scan
+        working-directory: src/${{ env.SERVICE }}
+        continue-on-error: true
+        run: |
+          echo "Running Trivy Filesystem Scan..."
+
+          trivy fs . \
+          --severity HIGH,CRITICAL \
+          --format sarif \
+          --output "${GITHUB_WORKSPACE}/reports/trivy-results.sarif"
+
+  #########################################################
+  # VERIFY TRIVY REPORT
+  #########################################################
+      - name: Verify Trivy Report
+        run: |
+          echo "===== Trivy Reports ====="
+          ls -lh reports
+
+  #########################################################
+  # TRIVY SECRET SCAN
+  #########################################################
+      - name: Trivy Secret Scan
+        working-directory: src/${{ env.SERVICE }}
+        continue-on-error: true
+        run: |
+           echo "Running Trivy Secret Scan..."
+
+           trivy fs . \
+           --scanners secret \
+           --format sarif \
+           --output "${GITHUB_WORKSPACE}/reports/trivy-secret.sarif"
+
+  #########################################################
+  # UPLOAD TRIVY VULNERABILITY SARIF
+  #########################################################
+      - name: Upload Trivy Vulnerability SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+         sarif_file: reports/trivy-results.sarif
+
+  #########################################################
+  # UPLOAD TRIVY SECRET SARIF
+  #########################################################
+      - name: Upload Trivy Secret SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: reports/trivy-secret.sarif
+
+  #########################################################
+  # UPLOAD SECURITY REPORTS
+  #########################################################
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-security-reports-${{ env.SERVICE }}
+          path: reports/
+          retention-days: 30
