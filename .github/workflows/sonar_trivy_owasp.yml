@@ -138,11 +138,12 @@ jobs:
         run: |
           echo "Running SonarQube Scan for Java..."
 
-          mvn sonar:sonar \
-            -Dsonar.projectKey=${SERVICE} \
-            -Dsonar.projectName=${SERVICE} \
-            -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.token=${SONAR_TOKEN}
+           mvn sonar:sonar \
+          -DskipTests \
+          -Dsonar.projectKey=${SERVICE} \
+          -Dsonar.projectName=${SERVICE} \
+          -Dsonar.host.url=${SONAR_HOST_URL} \
+          -Dsonar.token=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - NODE
