@@ -157,7 +157,7 @@ jobs:
           echo "Running SonarQube Scan for Node..."
 
           if [ ! -f sonar-project.properties ]; then
-            cat > sonar-project.properties <<EOF 
+            cat > sonar-project.properties <<EOF
             sonar.projectKey=${SERVICE}
             sonar.projectName=${SERVICE}
             sonar.sources=.
@@ -165,9 +165,18 @@ jobs:
           EOF
           fi
 
-          sonar-scanner \
-            -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.login=${SONAR_TOKEN}
+          docker run --rm \
+            -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+            -e SONAR_TOKEN=${SONAR_TOKEN} \
+            -v "$(pwd):/usr/src" \
+            -w /usr/src \
+            sonarsource/sonar-scanner-cli:latest \
+            sonar-scanner \
+              -Dsonar.projectKey=${SERVICE} \
+              -Dsonar.projectName=${SERVICE} \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=${SONAR_HOST_URL} \
+              -Dsonar.login=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - GO
@@ -188,9 +197,18 @@ jobs:
           EOF
           fi
 
-          sonar-scanner \
-            -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.login=${SONAR_TOKEN}
+          docker run --rm \
+            -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+            -e SONAR_TOKEN=${SONAR_TOKEN} \
+            -v "$(pwd):/usr/src" \
+            -w /usr/src \
+            sonarsource/sonar-scanner-cli:latest \
+            sonar-scanner \
+              -Dsonar.projectKey=${SERVICE} \
+              -Dsonar.projectName=${SERVICE} \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=${SONAR_HOST_URL} \
+              -Dsonar.login=${SONAR_TOKEN}
 
 #########################################################
 # WAIT FOR SONAR ANALYSIS
@@ -200,6 +218,15 @@ jobs:
         run: |
           echo "Waiting for SonarQube analysis to complete..."
           sleep 20
+
+#########################################################
+# FIND SONAR REPORT
+#########################################################
+
+      - name: Find Sonar Report
+        run: |
+          echo "Searching report-task.txt..."
+          find . -name report-task.txt
 
 #########################################################
 # SONARQUBE QUALITY GATE - JAVA
