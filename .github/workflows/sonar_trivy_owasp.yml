@@ -144,7 +144,7 @@ jobs:
             -Dsonar.projectKey=${SERVICE} \
             -Dsonar.projectName=${SERVICE} \
             -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.login=${SONAR_TOKEN}
+            -Dsonar.token=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - NODE
@@ -160,7 +160,7 @@ jobs:
             cat > sonar-project.properties <<EOF
             sonar.projectKey=${SERVICE}
             sonar.projectName=${SERVICE}
-            sonar.sources=.
+            sonar.sources=. 
             sonar.sourceEncoding=UTF-8
           EOF
           fi
@@ -170,13 +170,13 @@ jobs:
             -e SONAR_TOKEN=${SONAR_TOKEN} \
             -v "$(pwd):/usr/src" \
             -w /usr/src \
-            sonarsource/sonar-scanner-cli:latest \
+            sonarsource/sonar-scanner-cli:11.5 \
             sonar-scanner \
               -Dsonar.projectKey=${SERVICE} \
               -Dsonar.projectName=${SERVICE} \
               -Dsonar.sources=. \
               -Dsonar.host.url=${SONAR_HOST_URL} \
-              -Dsonar.login=${SONAR_TOKEN}
+              -Dsonar.token=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - GO
@@ -197,20 +197,20 @@ jobs:
           EOF
           fi
 
-           docker run --rm \
-           -e SONAR_HOST_URL=${SONAR_HOST_URL} \
-           -e SONAR_TOKEN=${SONAR_TOKEN} \
-           -v "$(pwd):/usr/src" \
-           -w /usr/src \
+          docker run --rm \
+            -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+            -e SONAR_TOKEN=${SONAR_TOKEN} \
+            -v "$(pwd):/usr/src" \
+            -w /usr/src \
             sonarsource/sonar-scanner-cli:11.5 \
             sonar-scanner \
-            -Dsonar.projectKey=${SERVICE} \
-           -Dsonar.projectName=${SERVICE} \
-           -Dsonar.sources=. \
-           -Dsonar.host.url=${SONAR_HOST_URL} \
-           -Dsonar.token=${SONAR_TOKEN} \
-           -Dsonar.scanner.skipJreProvisioning=true \
-           -Dsonar.scanner.force-deprecated-java-version=false
+              -Dsonar.projectKey=${SERVICE} \
+              -Dsonar.projectName=${SERVICE} \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=${SONAR_HOST_URL} \
+              -Dsonar.token=${SONAR_TOKEN} \
+              -Dsonar.scanner.skipJreProvisioning=true \
+              -Dsonar.scanner.force-deprecated-java-version=false
 
 #########################################################
 # WAIT FOR SONAR ANALYSIS
@@ -222,52 +222,45 @@ jobs:
           sleep 20
 
 #########################################################
-# FIND SONAR REPORT
+# VERIFY REQUIRED TOOLS
 #########################################################
 
-      - name: Find Sonar Report
+      - name: Verify Required Tools
         run: |
-          echo "Searching report-task.txt..."
-          find . -name report-task.txt
+          command -v curl >/dev/null 2>&1 || { echo "curl not found"; exit 1; }
+          command -v jq >/dev/null 2>&1 || { echo "jq not found"; exit 1; }
 
 #########################################################
-# SONARQUBE QUALITY GATE - JAVA
+# SONARQUBE QUALITY GATE
 #########################################################
 
-      - name: SonarQube Quality Gate - Java
-        if: env.RUNTIME == 'java'
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
-        with:
-          scanMetadataReportFile: src/${{ env.SERVICE }}/target/sonar/report-task.txt
-          pollingTimeoutSec: 300
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: SonarQube Quality Gate
+        run: |
+          echo "Checking SonarQube Quality Gate..."
 
-#########################################################
-# SONARQUBE QUALITY GATE - NODE
-#########################################################
+          for i in {1..30}; do
 
-      - name: SonarQube Quality Gate - Node
-        if: env.RUNTIME == 'node'
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
-        with:
-          scanMetadataReportFile: src/${{ env.SERVICE }}/.scannerwork/report-task.txt
-          pollingTimeoutSec: 300
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            STATUS=$(curl -s \
+              -u "${SONAR_TOKEN}:" \
+              "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}" \
+              | jq -r '.projectStatus.status')
 
-#########################################################
-# SONARQUBE QUALITY GATE - GO
-#########################################################
+            echo "Attempt ${i} : ${STATUS}"
 
-      - name: SonarQube Quality Gate - Go
-        if: env.RUNTIME == 'go'
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
-        with:
-          scanMetadataReportFile: src/${{ env.SERVICE }}/.scannerwork/report-task.txt
-          pollingTimeoutSec: 300
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            if [ "${STATUS}" = "OK" ]; then
+              echo "Quality Gate Passed"
+              exit 0
+            fi
+
+            if [ "${STATUS}" = "ERROR" ]; then
+              echo "Quality Gate Failed"
+              exit 1
+            fi
+
+            echo "Waiting for SonarQube to finish processing..."
+            sleep 5
+
+          done
+
+          echo "Timed out waiting for Quality Gate."
+          exit 1
