@@ -261,5 +261,5 @@ jobs:
            sleep 5
            done
 
-    echo "Timed out waiting for SonarQube Quality Gate."
-    exit 1
+           echo "Timed out waiting for SonarQube Quality Gate."
+           exit 1
