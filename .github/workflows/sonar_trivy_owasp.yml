@@ -259,7 +259,7 @@ jobs:
            fi
 
            sleep 5
-    done
+           done
 
     echo "Timed out waiting for SonarQube Quality Gate."
     exit 1
