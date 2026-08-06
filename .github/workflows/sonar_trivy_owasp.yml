@@ -374,21 +374,30 @@ jobs:
   #########################################################
   # UPLOAD TRIVY VULNERABILITY SARIF
   #########################################################
+      # - name: Upload Trivy Vulnerability SARIF
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   if: always()
+      #   with:
+      #    sarif_file: reports/trivy-results.sarif
       - name: Upload Trivy Vulnerability SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
         with:
-         sarif_file: reports/trivy-results.sarif
+          sarif_file: reports/trivy-results.sarif
+          category: trivy-vulnerability
 
   #########################################################
   # UPLOAD TRIVY SECRET SARIF
   #########################################################
+      # - name: Upload Trivy Secret SARIF
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   if: always()
+      #   with:
+      #     sarif_file: reports/trivy-secret.sarif
       - name: Upload Trivy Secret SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/trivy-secret.sarif
-
+          category: trivy-secret
   #########################################################
   # UPLOAD SECURITY REPORTS
   #########################################################
