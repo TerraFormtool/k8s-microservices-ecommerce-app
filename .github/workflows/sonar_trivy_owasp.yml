@@ -264,3 +264,12 @@ jobs:
 
           echo "Timed out waiting for Quality Gate."
           exit 1
+      - name: Debug Quality Gate Response
+        run: |
+          RESPONSE=$(curl -s \
+          -u "${SONAR_TOKEN}:" \
+          "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
+
+           echo "========== RESPONSE =========="
+           echo "$RESPONSE"
+           echo "=============================="
