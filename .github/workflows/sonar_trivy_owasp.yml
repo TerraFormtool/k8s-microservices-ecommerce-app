@@ -234,52 +234,52 @@ jobs:
 # SONARQUBE QUALITY GATE
 #########################################################
 
-      #- name: SonarQube Quality Gate
-        #run: |
-         #  echo "Checking SonarQube Quality Gate..."
-
-          # for i in {1..30}; do
-
-           #RESPONSE=$(curl -s \
-           #-u "${SONAR_TOKEN}:" \
-           #"${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
-
-            #STATUS=$(echo "$RESPONSE" | jq -r '.projectStatus.status')
-
-            #echo "Attempt ${i}: ${STATUS}"
-
-            #if [ "$STATUS" = "OK" ]; then
-            #echo "Quality Gate Passed"
-            #exit 0
-           #fi
-
-           #if [ "$STATUS" = "ERROR" ]; then
-           #echo "Quality Gate Failed"
-           #exit 1
-           #fi
-
-           #sleep 5
-           #done
-
-           #echo "Timed out waiting for SonarQube Quality Gate."
-           #exit 1
-      - name: Debug SonarQube Quality Gate
+      - name: SonarQube Quality Gate
         run: |
-          echo "SERVICE=${SERVICE}"
-          echo "SONAR_HOST_URL=${SONAR_HOST_URL}"
+          echo "Checking SonarQube Quality Gate..."
 
-          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
-          -u "${SONAR_TOKEN}:" \
-          "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
+          for i in {1..30}; do
 
-          echo "HTTP_CODE=${HTTP_CODE}"
+           RESPONSE=$(curl -s \
+           -u "${SONAR_TOKEN}:" \
+           "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
 
-          echo "===== RAW RESPONSE ====="
-          cat response.json
-          echo
-          echo "========================"
+            STATUS=$(echo "$RESPONSE" | jq -r '.projectStatus.status')
 
-          exit 1
+            echo "Attempt ${i}: ${STATUS}"
+
+            if [ "$STATUS" = "OK" ]; then
+            echo "Quality Gate Passed"
+            exit 0
+           fi
+
+           if [ "$STATUS" = "ERROR" ]; then
+           echo "Quality Gate Failed"
+           exit 1
+           fi
+
+           sleep 5
+           done
+
+           echo "Timed out waiting for SonarQube Quality Gate."
+           exit 1
+      # - name: Debug SonarQube Quality Gate
+      #   run: |
+      #     echo "SERVICE=${SERVICE}"
+      #     echo "SONAR_HOST_URL=${SONAR_HOST_URL}"
+
+      #     HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+      #     -u "${SONAR_TOKEN}:" \
+      #     "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
+
+      #     echo "HTTP_CODE=${HTTP_CODE}"
+
+      #     echo "===== RAW RESPONSE ====="
+      #     cat response.json
+      #     echo
+      #     echo "========================"
+
+      #     exit 1
     
       # - name: Debug Sonar URL
       #   run: |
