@@ -280,3 +280,15 @@ jobs:
           echo "========================"
 
           exit 1
+      - name: Debug Sonar URL
+        run: |
+         echo "HOST=${SONAR_HOST_URL}"
+         echo "SERVICE=${SERVICE}"
+
+         URL="${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}"
+
+         echo "URL=$URL"
+
+         curl -v \
+         -u "${SONAR_TOKEN}:" \
+         "$URL"
