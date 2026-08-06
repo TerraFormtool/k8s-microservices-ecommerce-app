@@ -148,9 +148,6 @@ jobs:
             go version
           fi
 
-          echo "SonarQube Scanner"
-          sonar-scanner --version
-
           echo "OWASP Dependency Check"
           dependency-check.sh --version
 
