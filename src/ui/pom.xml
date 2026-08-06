@@ -240,6 +240,11 @@
 				</configuration>
 			</plugin>
 			<plugin>
+               <groupId>org.sonarsource.scanner.maven</groupId>
+               <artifactId>sonar-maven-plugin</artifactId>
+               <version>5.2.0.4988</version>
+           </plugin>
+			<plugin>
         <artifactId>kiota-maven-plugin</artifactId>
         <groupId>io.kiota</groupId>
         <version>0.0.29</version>
