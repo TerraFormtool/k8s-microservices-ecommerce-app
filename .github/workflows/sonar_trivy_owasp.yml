@@ -24,6 +24,8 @@ concurrency:
 
 env:
   SERVICE: ${{ github.event.inputs.service }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 jobs:
   quality-security:
@@ -126,3 +128,90 @@ jobs:
         with:
           go-version: '1.23'
 
+#########################################################
+# SONARQUBE SCAN - JAVA
+#########################################################
+
+      - name: SonarQube Scan - Java
+        if: env.RUNTIME == 'java'
+        working-directory: src/${{ env.SERVICE }}
+        run: |
+          echo "Running SonarQube Scan for Java..."
+
+          mvn  sonar:sonar \
+            -Dsonar.projectKey=${SERVICE} \
+            -Dsonar.projectName=${SERVICE} \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.token=${SONAR_TOKEN}
+
+#########################################################
+# SONARQUBE SCAN - NODE
+#########################################################
+
+      - name: SonarQube Scan - Node
+        if: env.RUNTIME == 'node'
+        working-directory: src/${{ env.SERVICE }}
+        run: |
+
+          echo "Running SonarQube Scan for Node..."
+
+          if [ ! -f sonar-project.properties ]; then
+
+            cat > sonar-project.properties <<EOF
+sonar.projectKey=${SERVICE}
+sonar.projectName=${SERVICE}
+sonar.sources=.
+sonar.sourceEncoding=UTF-8
+EOF
+
+          fi
+
+          sonar-scanner \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.token=${SONAR_TOKEN}
+
+#########################################################
+# SONARQUBE SCAN - GO
+#########################################################
+
+      - name: SonarQube Scan - Go
+        if: env.RUNTIME == 'go'
+        working-directory: src/${{ env.SERVICE }}
+        run: |
+
+          echo "Running SonarQube Scan for Go..."
+
+          if [ ! -f sonar-project.properties ]; then
+
+            cat > sonar-project.properties <<EOF
+sonar.projectKey=${SERVICE}
+sonar.projectName=${SERVICE}
+sonar.sources=.
+sonar.sourceEncoding=UTF-8
+EOF
+
+          fi
+
+          sonar-scanner \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.token=${SONAR_TOKEN}
+
+#########################################################
+# WAIT FOR SONAR ANALYSIS
+#########################################################
+
+      - name: Wait for SonarQube Analysis
+        run: |
+          echo "Waiting for SonarQube analysis to complete..."
+          sleep 20
+
+#########################################################
+# SONARQUBE QUALITY GATE
+#########################################################
+
+      - name: SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 10
+        env:
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
