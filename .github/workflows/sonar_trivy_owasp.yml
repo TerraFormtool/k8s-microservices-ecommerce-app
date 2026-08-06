@@ -311,7 +311,7 @@ jobs:
         run: |
            mkdir -p "${GITHUB_WORKSPACE}/reports"
 
-           CMD="dependency-check.sh \
+           CMD="/opt/dependency-check/bin/dependency-check.sh \
            --project ${SERVICE} \
            --scan . \
            --format HTML \
