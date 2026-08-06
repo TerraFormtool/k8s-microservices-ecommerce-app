@@ -1,0 +1,160 @@
+name: CI - Quality & Security Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - ui
+          - cart
+          - orders
+          - checkout
+          - catalog
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: quality-security-${{ github.event.inputs.service }}
+  cancel-in-progress: true
+
+env:
+  SERVICE: ${{ github.event.inputs.service }}
+
+jobs:
+  quality-security:
+
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+#########################################################
+# CHECKOUT
+#########################################################
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+#########################################################
+# BUILD INFORMATION
+#########################################################
+
+      - name: Display Build Information
+        run: |
+          echo "======================================="
+          echo "Repository : $GITHUB_REPOSITORY"
+          echo "Branch     : $GITHUB_REF_NAME"
+          echo "Commit     : $GITHUB_SHA"
+          echo "Service    : ${SERVICE}"
+          echo "Runner     : $RUNNER_NAME"
+          echo "Workflow   : $GITHUB_WORKFLOW"
+          echo "======================================="
+
+#########################################################
+# VERIFY SERVICE FOLDER
+#########################################################
+
+      - name: Verify Service Folder
+        run: |
+          if [ ! -d "src/${SERVICE}" ]; then
+            echo "ERROR: src/${SERVICE} does not exist."
+            exit 1
+          fi
+
+#########################################################
+# DETECT RUNTIME
+#########################################################
+
+      - name: Detect Runtime
+        run: |
+          if [[ "${SERVICE}" == "ui" || "${SERVICE}" == "cart" || "${SERVICE}" == "orders" ]]; then
+            echo "RUNTIME=java" >> $GITHUB_ENV
+          elif [[ "${SERVICE}" == "checkout" ]]; then
+            echo "RUNTIME=node" >> $GITHUB_ENV
+          elif [[ "${SERVICE}" == "catalog" ]]; then
+            echo "RUNTIME=go" >> $GITHUB_ENV
+          else
+            echo "Unknown service"
+            exit 1
+          fi
+
+#########################################################
+# DISPLAY RUNTIME
+#########################################################
+
+      - name: Display Runtime
+        run: |
+          echo "Runtime : ${RUNTIME}"
+
+#########################################################
+# JAVA SETUP
+#########################################################
+
+      - name: Setup Java
+        if: env.RUNTIME == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+#########################################################
+# NODE SETUP
+#########################################################
+
+      - name: Setup NodeJS
+        if: env.RUNTIME == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+#########################################################
+# GO SETUP
+#########################################################
+
+      - name: Setup Go
+        if: env.RUNTIME == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+#########################################################
+# VERIFY INSTALLED TOOLS
+#########################################################
+
+      - name: Verify Installed Tools
+        run: |
+          echo "===== Installed Tools ====="
+
+          if [ "${RUNTIME}" = "java" ]; then
+            java -version
+            mvn -version
+          fi
+
+          if [ "${RUNTIME}" = "node" ]; then
+            node --version
+            npm --version
+          fi
+
+          if [ "${RUNTIME}" = "go" ]; then
+            go version
+          fi
+
+          echo "SonarQube Scanner"
+          sonar-scanner --version
+
+          echo "OWASP Dependency Check"
+          dependency-check.sh --version
+
+          echo "Trivy"
+          trivy --version
+
+          echo "==========================="
