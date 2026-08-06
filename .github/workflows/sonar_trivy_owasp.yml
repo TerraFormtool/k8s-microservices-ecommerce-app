@@ -202,12 +202,43 @@ jobs:
           sleep 20
 
 #########################################################
-# SONARQUBE QUALITY GATE
+# SONARQUBE QUALITY GATE - JAVA
 #########################################################
 
-      - name: SonarQube Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
-        timeout-minutes: 10
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+- name: SonarQube Quality Gate - Java
+  if: env.RUNTIME == 'java'
+  uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
+  with:
+    scanMetadataReportFile: src/${{ env.SERVICE }}/target/sonar/report-task.txt
+    pollingTimeoutSec: 300
+  env:
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+#########################################################
+# SONARQUBE QUALITY GATE - NODE
+#########################################################
+
+- name: SonarQube Quality Gate - Node
+  if: env.RUNTIME == 'node'
+  uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
+  with:
+    scanMetadataReportFile: src/${{ env.SERVICE }}/.scannerwork/report-task.txt
+    pollingTimeoutSec: 300
+  env:
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+#########################################################
+# SONARQUBE QUALITY GATE - GO
+#########################################################
+
+- name: SonarQube Quality Gate - Go
+  if: env.RUNTIME == 'go'
+  uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
+  with:
+    scanMetadataReportFile: src/${{ env.SERVICE }}/.scannerwork/report-task.txt
+    pollingTimeoutSec: 300
+  env:
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
