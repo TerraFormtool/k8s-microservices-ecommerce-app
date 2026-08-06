@@ -303,18 +303,7 @@ jobs:
   #########################################################
   # OWASP DEPENDENCY CHECK
   #########################################################
-      # - name: OWASP Dependency Check
-      #   working-directory: src/${{ env.SERVICE }}
-      #   run: |
-      #     echo "Running OWASP Dependency Check..."
-
-      #     /opt/dependency-check/bin/dependency-check.sh  \
-      #     --project "${{ env.SERVICE }}" \
-      #     --scan . \
-      #     --format HTML \
-      #     --format JSON \
-      #     --out "${GITHUB_WORKSPACE}/reports" \
-      #     --noupdate
+    
       - name: OWASP Dependency Check
         working-directory: src/${{ env.SERVICE }}
         env:
