@@ -236,40 +236,30 @@ jobs:
 
       - name: SonarQube Quality Gate
         run: |
-          echo "Checking SonarQube Quality Gate..."
+           echo "Checking SonarQube Quality Gate..."
 
-          for i in {1..30}; do
+           for i in {1..30}; do
 
-            STATUS=$(curl -s \
-              -u "${SONAR_TOKEN}:" \
-              "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}" \
-              | jq -r '.projectStatus.status')
+           RESPONSE=$(curl -s \
+           -u "${SONAR_TOKEN}:" \
+           "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
 
-            echo "Attempt ${i} : ${STATUS}"
+            STATUS=$(echo "$RESPONSE" | jq -r '.projectStatus.status')
 
-            if [ "${STATUS}" = "OK" ]; then
-              echo "Quality Gate Passed"
-              exit 0
-            fi
+            echo "Attempt ${i}: ${STATUS}"
 
-            if [ "${STATUS}" = "ERROR" ]; then
-              echo "Quality Gate Failed"
-              exit 1
-            fi
+            if [ "$STATUS" = "OK" ]; then
+            echo "Quality Gate Passed"
+            exit 0
+           fi
 
-            echo "Waiting for SonarQube to finish processing..."
-            sleep 5
+           if [ "$STATUS" = "ERROR" ]; then
+           echo "Quality Gate Failed"
+           exit 1
+           fi
 
-          done
+           sleep 5
+    done
 
-          echo "Timed out waiting for Quality Gate."
-          exit 1
-      - name: Debug Quality Gate Response
-        run: |
-          RESPONSE=$(curl -s \
-          -u "${SONAR_TOKEN}:" \
-          "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${SERVICE}")
-
-           echo "========== RESPONSE =========="
-           echo "$RESPONSE"
-           echo "=============================="
+    echo "Timed out waiting for SonarQube Quality Gate."
+    exit 1
