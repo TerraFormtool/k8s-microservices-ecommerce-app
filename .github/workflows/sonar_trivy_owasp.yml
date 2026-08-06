@@ -126,32 +126,3 @@ jobs:
         with:
           go-version: '1.23'
 
-#########################################################
-# VERIFY INSTALLED TOOLS
-#########################################################
-
-      - name: Verify Installed Tools
-        run: |
-          echo "===== Installed Tools ====="
-
-          if [ "${RUNTIME}" = "java" ]; then
-            java -version
-            mvn -version
-          fi
-
-          if [ "${RUNTIME}" = "node" ]; then
-            node --version
-            npm --version
-          fi
-
-          if [ "${RUNTIME}" = "go" ]; then
-            go version
-          fi
-
-          echo "OWASP Dependency Check"
-          dependency-check.sh --version
-
-          echo "Trivy"
-          trivy --version
-
-          echo "==========================="
