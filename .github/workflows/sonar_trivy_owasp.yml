@@ -203,7 +203,7 @@ jobs:
           -v "$(pwd):/usr/src" \
           -v "$(pwd)/.scannerwork:/usr/src/.scannerwork" \
           -w /usr/src \
-           sonarsource/sonar-scanner-cli:lts \
+           sonarsource/sonar-scanner-cli:11.5 \
            sonar-scanner \
            -Dsonar.projectKey=${SERVICE} \
            -Dsonar.projectName=${SERVICE} \
