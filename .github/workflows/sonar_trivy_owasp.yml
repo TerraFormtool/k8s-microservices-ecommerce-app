@@ -138,12 +138,12 @@ jobs:
         run: |
           echo "Running SonarQube Scan for Java..."
 
-           mvn sonar:sonar \
-          -DskipTests \
-          -Dsonar.projectKey=${SERVICE} \
-          -Dsonar.projectName=${SERVICE} \
-          -Dsonar.host.url=${SONAR_HOST_URL} \
-          -Dsonar.token=${SONAR_TOKEN}
+          mvn sonar:sonar \
+            -DskipTests \
+            -Dsonar.projectKey=${SERVICE} \
+            -Dsonar.projectName=${SERVICE} \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.login=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - NODE
@@ -153,23 +153,20 @@ jobs:
         if: env.RUNTIME == 'node'
         working-directory: src/${{ env.SERVICE }}
         run: |
-
           echo "Running SonarQube Scan for Node..."
 
           if [ ! -f sonar-project.properties ]; then
-
             cat > sonar-project.properties <<EOF
-sonar.projectKey=${SERVICE}
-sonar.projectName=${SERVICE}
-sonar.sources=.
-sonar.sourceEncoding=UTF-8
-EOF
-
+            sonar.projectKey=${SERVICE}
+            sonar.projectName=${SERVICE}
+            sonar.sources=.
+            sonar.sourceEncoding=UTF-8
+          EOF
           fi
 
           sonar-scanner \
             -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.token=${SONAR_TOKEN}
+            -Dsonar.login=${SONAR_TOKEN}
 
 #########################################################
 # SONARQUBE SCAN - GO
@@ -179,23 +176,20 @@ EOF
         if: env.RUNTIME == 'go'
         working-directory: src/${{ env.SERVICE }}
         run: |
-
           echo "Running SonarQube Scan for Go..."
 
           if [ ! -f sonar-project.properties ]; then
-
             cat > sonar-project.properties <<EOF
-sonar.projectKey=${SERVICE}
-sonar.projectName=${SERVICE}
-sonar.sources=.
-sonar.sourceEncoding=UTF-8
-EOF
-
+            sonar.projectKey=${SERVICE}
+            sonar.projectName=${SERVICE}
+            sonar.sources=.
+            sonar.sourceEncoding=UTF-8 
+          EOF
           fi
 
           sonar-scanner \
             -Dsonar.host.url=${SONAR_HOST_URL} \
-            -Dsonar.token=${SONAR_TOKEN}
+            -Dsonar.login=${SONAR_TOKEN}
 
 #########################################################
 # WAIT FOR SONAR ANALYSIS
@@ -211,8 +205,8 @@ EOF
 #########################################################
 
       - name: SonarQube Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
         timeout-minutes: 10
         env:
-          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
