@@ -198,17 +198,19 @@ jobs:
           fi
 
           docker run --rm \
-            -e SONAR_HOST_URL=${SONAR_HOST_URL} \
-            -e SONAR_TOKEN=${SONAR_TOKEN} \
-            -v "$(pwd):/usr/src" \
-            -w /usr/src \
-            sonarsource/sonar-scanner-cli:latest \
-            sonar-scanner \
-              -Dsonar.projectKey=${SERVICE} \
-              -Dsonar.projectName=${SERVICE} \
-              -Dsonar.sources=. \
-              -Dsonar.host.url=${SONAR_HOST_URL} \
-              -Dsonar.login=${SONAR_TOKEN}
+          -e SONAR_HOST_URL=${SONAR_HOST_URL} \
+          -e SONAR_TOKEN=${SONAR_TOKEN} \
+          -v "$(pwd):/usr/src" \
+          -v "$(pwd)/.scannerwork:/usr/src/.scannerwork" \
+          -w /usr/src \
+           sonarsource/sonar-scanner-cli:lts \
+           sonar-scanner \
+           -Dsonar.projectKey=${SERVICE} \
+           -Dsonar.projectName=${SERVICE} \
+           -Dsonar.sources=. \
+           -Dsonar.host.url=${SONAR_HOST_URL} \
+           -Dsonar.login=${SONAR_TOKEN} \
+           -Dsonar.working.directory=/usr/src/.scannerwork
 
 #########################################################
 # WAIT FOR SONAR ANALYSIS
