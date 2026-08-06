@@ -303,18 +303,40 @@ jobs:
   #########################################################
   # OWASP DEPENDENCY CHECK
   #########################################################
+      # - name: OWASP Dependency Check
+      #   working-directory: src/${{ env.SERVICE }}
+      #   run: |
+      #     echo "Running OWASP Dependency Check..."
+
+      #     /opt/dependency-check/bin/dependency-check.sh  \
+      #     --project "${{ env.SERVICE }}" \
+      #     --scan . \
+      #     --format HTML \
+      #     --format JSON \
+      #     --out "${GITHUB_WORKSPACE}/reports" \
+      #     --noupdate
       - name: OWASP Dependency Check
         working-directory: src/${{ env.SERVICE }}
-        run: |
-          echo "Running OWASP Dependency Check..."
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+         run: |
+           mkdir -p "${GITHUB_WORKSPACE}/reports"
 
-          /opt/dependency-check/bin/dependency-check.sh  \
-          --project "${{ env.SERVICE }}" \
-          --scan . \
-          --format HTML \
-          --format JSON \
-          --out "${GITHUB_WORKSPACE}/reports" \
-          --noupdate
+           CMD="dependency-check.sh \
+           --project ${SERVICE} \
+           --scan . \
+           --format HTML \
+           --format JSON \
+           --format XML \
+           --out ${GITHUB_WORKSPACE}/reports \
+           --disableCentral \
+           --nvdApiKey ${NVD_API_KEY}"
+
+           if [ "${RUNTIME}" = "node" ]; then
+           CMD="$CMD --disableYarnAudit"
+           fi
+
+           eval "$CMD"
 
   #########################################################
   # VERIFY OWASP REPORT
