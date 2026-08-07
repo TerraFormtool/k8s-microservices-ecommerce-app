@@ -373,7 +373,7 @@ jobs:
 
       - name: Trivy Filesystem Scan
         run: |
-          trivy fs ${SERVICE} \
+          trivy fs src/${SERVICE} \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format sarif \
@@ -446,7 +446,7 @@ jobs:
         run: |
           docker tag \
             src/${SERVICE}:${IMAGE_TAG} \
-            ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG}
+            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # TAG IMAGE (LATEST)
@@ -455,8 +455,8 @@ jobs:
       - name: Tag Latest Image
         run: |
           docker tag \
-            src/${SERVICE}:${IMAGE_TAG} \
-            ${ECR_REGISTRY}/src/${SERVICE}:latest
+            ${SERVICE}:${IMAGE_TAG} \
+            ${ECR_REGISTRY}/${SERVICE}:latest
 
 #########################################################
 # PUSH SHA IMAGE
@@ -465,7 +465,7 @@ jobs:
       - name: Push SHA Image
         run: |
           docker push \
-            ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG}
+            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # PUSH LATEST IMAGE
@@ -474,7 +474,7 @@ jobs:
       - name: Push Latest Image
         run: |
           docker push \
-            ${ECR_REGISTRY}/src/${SERVICE}:latest
+            ${ECR_REGISTRY}/${SERVICE}:latest
 
 #########################################################
 # VERIFY ECR IMAGE
@@ -483,7 +483,7 @@ jobs:
       - name: Verify Image in ECR
         run: |
           aws ecr describe-images \
-            --repository-name src/${SERVICE} \
+            --repository-name ${SERVICE} \
             --image-ids imageTag=${IMAGE_TAG} \
             --region ${AWS_REGION}
 
@@ -494,7 +494,7 @@ jobs:
       - name: Verify Latest Tag
         run: |
           aws ecr describe-images \
-            --repository-name src/${SERVICE} \
+            --repository-name ${SERVICE} \
             --image-ids imageTag=latest \
             --region ${AWS_REGION}
 
@@ -505,7 +505,7 @@ jobs:
       - name: Display ECR Images
         run: |
           aws ecr list-images \
-            --repository-name src/${SERVICE} \
+            --repository-name ${SERVICE} \
             --region ${AWS_REGION}
 
 #########################################################
@@ -518,7 +518,7 @@ jobs:
           echo "========================================="
           echo "Docker Build Completed Successfully"
           echo "========================================="
-          echo "Service   : src/${SERVICE}"
+          echo "Service   : ${SERVICE}"
           echo "Image Tag : ${IMAGE_TAG}"
           echo "Registry  : ${ECR_REGISTRY}"
           echo "========================================="
@@ -530,9 +530,9 @@ jobs:
       - name: Remove Local Images
         if: always()
         run: |
-          docker image rm src/${SERVICE}:${IMAGE_TAG} || true
-          docker image rm ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG} || true
-          docker image rm ${ECR_REGISTRY}/src/${SERVICE}:latest || true
+          docker image rm ${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/${SERVICE}:latest || true
 
 #########################################################
 # DOCKER CLEANUP
