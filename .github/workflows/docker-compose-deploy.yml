@@ -1,0 +1,236 @@
+name: CD - Docker Compose Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - ui
+          - cart
+          - orders
+          - checkout
+          - catalog
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.inputs.service }}
+  cancel-in-progress: true
+
+env:
+  SERVICE: ${{ github.event.inputs.service }}
+
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+jobs:
+
+  deploy:
+
+    runs-on: self-hosted
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+#########################################################
+# CHECKOUT
+#########################################################
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+#########################################################
+# DISPLAY INFORMATION
+#########################################################
+
+      - name: Display Deployment Information
+        run: |
+          echo "======================================="
+          echo "Service     : ${SERVICE}"
+          echo "Registry    : ${ECR_REGISTRY}"
+          echo "======================================="
+
+#########################################################
+# AWS LOGIN
+#########################################################
+
+      - name: Configure AWS Credentials
+        run: |
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set region "$AWS_DEFAULT_REGION"
+
+#########################################################
+# LOGIN ECR
+#########################################################
+
+      - name: Login Amazon ECR
+        run: |
+          aws ecr get-login-password \
+            --region ${AWS_REGION} | \
+          docker login \
+            --username AWS \
+            --password-stdin \
+            ${ECR_REGISTRY}
+
+#########################################################
+# VERIFY REPOSITORY
+#########################################################
+
+      - name: Verify Repository
+        run: |
+          aws ecr describe-repositories \
+            --repository-names ${SERVICE} \
+            --region ${AWS_REGION}
+
+#########################################################
+# VERIFY DOCKER COMPOSE
+#########################################################
+
+      - name: Verify Docker Compose
+        run: |
+          docker compose version
+
+#########################################################
+# PULL IMAGE
+#########################################################
+
+      - name: Pull Latest Image
+        run: |
+          docker compose pull ${SERVICE}
+
+#########################################################
+# VERIFY IMAGE
+#########################################################
+
+      - name: Verify Pulled Image
+        run: |
+          docker images | grep ${SERVICE}
+
+#########################################################
+# STOP CONTAINER
+#########################################################
+
+      - name: Stop Existing Container
+        run: |
+          docker compose stop ${SERVICE} || true
+
+#########################################################
+# REMOVE CONTAINER
+#########################################################
+
+      - name: Remove Existing Container
+        run: |
+          docker compose rm -f ${SERVICE} || true
+
+#########################################################
+# DEPLOY CONTAINER
+#########################################################
+
+      - name: Deploy Service
+        run: |
+          docker compose up -d \
+            --no-deps \
+            --force-recreate \
+            ${SERVICE}
+
+#########################################################
+# WAIT
+#########################################################
+
+      - name: Wait For Startup
+        run: |
+          sleep 20
+
+#########################################################
+# VERIFY CONTAINER
+#########################################################
+
+      - name: Verify Compose Status
+        run: |
+          docker compose ps ${SERVICE}
+
+#########################################################
+# VERIFY RUNNING CONTAINER
+#########################################################
+
+      - name: Verify Running Container
+        run: |
+          docker ps \
+            --filter name=${SERVICE}
+
+#########################################################
+# VERIFY IMAGE
+#########################################################
+
+      - name: Verify Running Image
+        run: |
+          docker inspect ${SERVICE} \
+            --format '{{.Config.Image}}'
+
+#########################################################
+# LOGS
+#########################################################
+
+      - name: Display Container Logs
+        continue-on-error: true
+        run: |
+          docker compose logs \
+            --tail=100 \
+            ${SERVICE}
+
+#########################################################
+# CLEANUP
+#########################################################
+
+      - name: Remove Old Images
+        if: always()
+        run: |
+          docker image prune -af || true
+          docker builder prune -af || true
+
+#########################################################
+# DISK USAGE
+#########################################################
+
+      - name: Docker Disk Usage
+        run: |
+          docker system df
+
+#########################################################
+# SUMMARY
+#########################################################
+
+      - name: Deployment Summary
+        run: |
+          echo ""
+          echo "======================================="
+          echo "DEPLOYMENT SUCCESSFUL"
+          echo "======================================="
+          echo "Service  : ${SERVICE}"
+          echo "Registry : ${ECR_REGISTRY}"
+          echo "======================================="
+
+#########################################################
+# LOGOUT
+#########################################################
+
+      - name: Logout Amazon ECR
+        if: always()
+        run: |
+          docker logout ${ECR_REGISTRY} || true
