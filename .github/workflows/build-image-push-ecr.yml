@@ -357,7 +357,7 @@ jobs:
 
       - name: Verify Docker Image
         run: |
-          docker image inspect src/${SERVICE}:${IMAGE_TAG}
+          docker image inspect ${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # CREATE REPORT DIRECTORY
