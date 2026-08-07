@@ -445,7 +445,7 @@ jobs:
       - name: Tag SHA Image
         run: |
           docker tag \
-            src/${SERVICE}:${IMAGE_TAG} \
+            ${SERVICE}:${IMAGE_TAG} \
             ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
