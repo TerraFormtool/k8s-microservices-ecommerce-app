@@ -44,17 +44,18 @@ FROM node:22-alpine AS builder
 
 WORKDIR /workspace
 
-# Copy entire repository (monorepo)
 COPY . .
 
-# Go to checkout service
 WORKDIR /workspace/src/checkout
 
-# Install dependencies
-RUN npm ci
+# Install Yarn if needed
+RUN corepack enable
 
-# Build NestJS
-RUN npm run build
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Build application
+RUN yarn build
 
 # ---------- Stage 2 : Runtime ----------
 FROM node:22-alpine
@@ -63,14 +64,16 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --from=builder /workspace/src/checkout/package*.json ./
+RUN corepack enable
 
-RUN npm ci --omit=dev
+COPY --from=builder /workspace/src/checkout/package.json .
+COPY --from=builder /workspace/src/checkout/yarn.lock .
+
+# Install production dependencies
+RUN yarn install --production --frozen-lockfile
 
 COPY --from=builder /workspace/src/checkout/dist ./dist
 
 EXPOSE 8080
 
 CMD ["node", "dist/main"]
-
-# ENTRYPOINT [ "node", "dist/main.js" ]
