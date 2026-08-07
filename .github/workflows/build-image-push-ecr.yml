@@ -333,7 +333,7 @@ jobs:
 
       - name: Verify Dockerfile
         run: |
-          if [ ! -f "src/src/${SERVICE}/Dockerfile" ]; then
+          if [ ! -f "src/${SERVICE}/Dockerfile" ]; then
             echo "ERROR: Dockerfile not found in src/${SERVICE}"
             exit 1
           fi
@@ -347,8 +347,8 @@ jobs:
           docker build \
             --pull \
             --no-cache \
-            -t src/src/${SERVICE}:${IMAGE_TAG} \
-            -f src/src/${SERVICE}/Dockerfile \
+            -t src/${SERVICE}:${IMAGE_TAG} \
+            -f src/${SERVICE}/Dockerfile \
             src/${SERVICE}
 
 #########################################################
