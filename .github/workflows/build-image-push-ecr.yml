@@ -322,7 +322,7 @@ jobs:
       - name: Verify Repository
         run: |
           aws ecr describe-repositories \
-            --repository-names src/${SERVICE} \
+            --repository-names ${SERVICE} \
             --region ${AWS_REGION}
 
 #########################################################
