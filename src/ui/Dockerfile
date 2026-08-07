@@ -7,7 +7,7 @@ WORKDIR /workspace
 COPY . .
 
 # Build only UI
-WORKDIR /workspace/ui
+WORKDIR /workspace/src/ui
 
 RUN mvn clean package -DskipTests
 
