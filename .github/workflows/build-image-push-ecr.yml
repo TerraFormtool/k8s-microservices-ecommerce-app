@@ -442,9 +442,9 @@ jobs:
 
       - name: Tag SHA Image
         run: |
-          docker tag \
-            ${SERVICE}:${IMAGE_TAG} \
-            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+         docker tag \
+         ${SERVICE}:${IMAGE_TAG} \
+         ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # TAG IMAGE (LATEST)
@@ -452,10 +452,9 @@ jobs:
 
       - name: Tag Latest Image
         run: |
-          docker tag \
-            docker tag \
-                ${SERVICE}:${IMAGE_TAG} \
-                ${ECR_REGISTRY}/${SERVICE}:latest
+         docker tag \
+         ${SERVICE}:${IMAGE_TAG} \
+         ${ECR_REGISTRY}/${SERVICE}:latest
 
 #########################################################
 # PUSH SHA IMAGE
