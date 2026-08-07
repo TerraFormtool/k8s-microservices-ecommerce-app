@@ -1,0 +1,554 @@
+name: 02 - Docker Build & Push to ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - ui
+          - cart
+          - orders
+          - checkout
+          - catalog
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+concurrency:
+  group: docker-build-${{ github.event.inputs.service }}
+  cancel-in-progress: true
+
+env:
+  SERVICE: ${{ github.event.inputs.service }}
+
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+  ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-oidc-selfhosted-role
+
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+jobs:
+
+  docker-build:
+
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+#########################################################
+# CHECKOUT SOURCE
+#########################################################
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+#########################################################
+# GENERATE IMAGE TAG
+#########################################################
+
+      - name: Generate Image Tag
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
+
+#########################################################
+# DISPLAY BUILD INFORMATION
+#########################################################
+
+      - name: Display Build Information
+        run: |
+          echo "==========================================="
+          echo "Repository   : ${GITHUB_REPOSITORY}"
+          echo "Branch       : ${GITHUB_REF_NAME}"
+          echo "Commit       : ${GITHUB_SHA}"
+          echo "Service      : ${SERVICE}"
+          echo "Image Tag    : ${IMAGE_TAG}"
+          echo "AWS Region   : ${AWS_REGION}"
+          echo "Runner       : ${RUNNER_NAME}"
+          echo "==========================================="
+
+#########################################################
+# VERIFY SERVICE DIRECTORY
+#########################################################
+
+      - name: Verify Service Folder
+        run: |
+          if [ ! -d "${SERVICE}" ]; then
+            echo "ERROR: ${SERVICE} directory not found."
+            exit 1
+          fi
+
+#########################################################
+# DETECT RUNTIME
+#########################################################
+
+      - name: Detect Runtime
+        run: |
+          if [[ "${SERVICE}" == "ui" || \
+                "${SERVICE}" == "cart" || \
+                "${SERVICE}" == "orders" ]]; then
+
+            echo "RUNTIME=java" >> $GITHUB_ENV
+
+          elif [[ "${SERVICE}" == "checkout" ]]; then
+
+            echo "RUNTIME=node" >> $GITHUB_ENV
+
+          elif [[ "${SERVICE}" == "catalog" ]]; then
+
+            echo "RUNTIME=go" >> $GITHUB_ENV
+
+          else
+
+            echo "Unknown Runtime"
+            exit 1
+
+          fi
+
+#########################################################
+# DISPLAY RUNTIME
+#########################################################
+
+      - name: Display Runtime
+        run: |
+          echo "Runtime : ${RUNTIME}"
+
+#########################################################
+# ENABLE DOCKER BUILDKIT
+#########################################################
+
+      - name: Enable Docker BuildKit
+        run: |
+          echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
+
+#########################################################
+# SETUP DOCKER BUILDX
+#########################################################
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+#########################################################
+# CONFIGURE AWS OIDC
+#########################################################
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          role-session-name: GitHubActions
+          aws-region: ${{ env.AWS_REGION }}
+
+#########################################################
+# VERIFY AWS LOGIN
+#########################################################
+
+      - name: Verify AWS Identity
+        run: |
+          aws sts get-caller-identity
+
+#########################################################
+# JAVA SETUP
+#########################################################
+
+      - name: Setup Java
+        if: env.RUNTIME == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+#########################################################
+# NODE SETUP
+#########################################################
+
+      - name: Setup NodeJS
+        if: env.RUNTIME == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+#########################################################
+# GO SETUP
+#########################################################
+
+      - name: Setup Go
+        if: env.RUNTIME == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+#########################################################
+# VERIFY TOOL VERSIONS
+#########################################################
+
+      - name: Verify Installed Tools
+        run: |
+          docker --version
+          docker buildx version
+          aws --version
+
+          if [[ "${RUNTIME}" == "java" ]]; then
+            java -version
+            mvn -version
+          fi
+
+          if [[ "${RUNTIME}" == "node" ]]; then
+            node --version
+            npm --version
+
+            if command -v yarn >/dev/null 2>&1; then
+              yarn --version
+            fi
+          fi
+
+          if [[ "${RUNTIME}" == "go" ]]; then
+            go version
+          fi
+
+#########################################################
+# BUILD JAVA SERVICE
+#########################################################
+
+      - name: Build Java Service
+        if: env.RUNTIME == 'java'
+        run: |
+          cd ${SERVICE}
+
+          mvn clean package \
+            -DskipTests
+
+#########################################################
+# BUILD NODE SERVICE
+#########################################################
+
+      - name: Build Node Service
+        if: env.RUNTIME == 'node'
+        run: |
+          cd ${SERVICE}
+
+          if [ -f yarn.lock ]; then
+
+            echo "Using Yarn"
+
+            corepack enable
+
+            yarn install --frozen-lockfile
+
+            yarn build
+
+          else
+
+            echo "Using npm"
+
+            npm ci
+
+            npm run build
+
+          fi
+
+#########################################################
+# BUILD GO SERVICE
+#########################################################
+
+      - name: Build Go Service
+        if: env.RUNTIME == 'go'
+        run: |
+          cd ${SERVICE}
+
+          go mod download
+
+          go mod tidy
+
+          go build -o app .
+
+#########################################################
+# VERIFY BUILD OUTPUT
+#########################################################
+
+      - name: Verify Build Output
+        run: |
+          echo "Searching build artifacts..."
+
+          find . \
+            \( -name "*.jar" \
+            -o -name "app" \
+            -o -name "dist" \
+            -o -name "build" \)
+#########################################################
+# LOGIN TO AMAZON ECR
+#########################################################
+
+      - name: Login Amazon ECR
+        run: |
+          aws ecr get-login-password \
+            --region ${AWS_REGION} | \
+          docker login \
+            --username AWS \
+            --password-stdin \
+            ${ECR_REGISTRY}
+
+#########################################################
+# CREATE REPOSITORY IF NOT EXISTS
+#########################################################
+
+      - name: Create ECR Repository
+        run: |
+
+          aws ecr describe-repositories \
+            --repository-names ${SERVICE} \
+            --region ${AWS_REGION} >/dev/null 2>&1 || \
+
+          aws ecr create-repository \
+            --repository-name ${SERVICE} \
+            --image-scanning-configuration scanOnPush=true \
+            --region ${AWS_REGION}
+
+#########################################################
+# VERIFY REPOSITORY
+#########################################################
+
+      - name: Verify Repository
+        run: |
+          aws ecr describe-repositories \
+            --repository-names ${SERVICE} \
+            --region ${AWS_REGION}
+
+#########################################################
+# VERIFY DOCKERFILE
+#########################################################
+
+      - name: Verify Dockerfile
+        run: |
+          if [ ! -f "${SERVICE}/Dockerfile" ]; then
+            echo "ERROR: Dockerfile not found in ${SERVICE}"
+            exit 1
+          fi
+
+#########################################################
+# BUILD DOCKER IMAGE
+#########################################################
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --pull \
+            --no-cache \
+            -t ${SERVICE}:${IMAGE_TAG} \
+            -f ${SERVICE}/Dockerfile \
+            ${SERVICE}
+
+#########################################################
+# VERIFY LOCAL IMAGE
+#########################################################
+
+      - name: Verify Docker Image
+        run: |
+          docker image inspect ${SERVICE}:${IMAGE_TAG}
+
+#########################################################
+# CREATE REPORT DIRECTORY
+#########################################################
+
+      - name: Create Reports Directory
+        run: |
+          mkdir -p reports
+
+#########################################################
+# TRIVY FILESYSTEM SCAN
+#########################################################
+
+      - name: Trivy Filesystem Scan
+        run: |
+          trivy fs ${SERVICE} \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output reports/trivy-fs.sarif
+
+#########################################################
+# TRIVY IMAGE SCAN
+#########################################################
+
+      - name: Trivy Image Scan
+        run: |
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output reports/trivy-image.sarif \
+            ${SERVICE}:${IMAGE_TAG}
+
+#########################################################
+# TRIVY HTML REPORT
+#########################################################
+
+      - name: Generate Trivy HTML Report
+        run: |
+          if [ -f /usr/local/share/trivy/templates/html.tpl ]; then
+            trivy image \
+              --format template \
+              --template "@/usr/local/share/trivy/templates/html.tpl" \
+              --output reports/trivy-report.html \
+              ${SERVICE}:${IMAGE_TAG}
+          else
+            echo "HTML template not found. Skipping HTML report."
+          fi
+
+#########################################################
+# UPLOAD TRIVY SARIF
+#########################################################
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: reports/trivy-image.sarif
+          category: trivy-image
+
+#########################################################
+# UPLOAD TRIVY FS SARIF
+#########################################################
+
+      - name: Upload Trivy Filesystem SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: reports/trivy-fs.sarif
+          category: trivy-fs
+
+#########################################################
+# UPLOAD REPORTS
+#########################################################
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ env.SERVICE }}
+          path: reports/
+
+#########################################################
+# TAG IMAGE (SHA)
+#########################################################
+
+      - name: Tag SHA Image
+        run: |
+          docker tag \
+            ${SERVICE}:${IMAGE_TAG} \
+            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+
+#########################################################
+# TAG IMAGE (LATEST)
+#########################################################
+
+      - name: Tag Latest Image
+        run: |
+          docker tag \
+            ${SERVICE}:${IMAGE_TAG} \
+            ${ECR_REGISTRY}/${SERVICE}:latest
+
+#########################################################
+# PUSH SHA IMAGE
+#########################################################
+
+      - name: Push SHA Image
+        run: |
+          docker push \
+            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+
+#########################################################
+# PUSH LATEST IMAGE
+#########################################################
+
+      - name: Push Latest Image
+        run: |
+          docker push \
+            ${ECR_REGISTRY}/${SERVICE}:latest
+
+#########################################################
+# VERIFY ECR IMAGE
+#########################################################
+
+      - name: Verify Image in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name ${SERVICE} \
+            --image-ids imageTag=${IMAGE_TAG} \
+            --region ${AWS_REGION}
+
+#########################################################
+# VERIFY LATEST TAG
+#########################################################
+
+      - name: Verify Latest Tag
+        run: |
+          aws ecr describe-images \
+            --repository-name ${SERVICE} \
+            --image-ids imageTag=latest \
+            --region ${AWS_REGION}
+
+#########################################################
+# DISPLAY IMAGES
+#########################################################
+
+      - name: Display ECR Images
+        run: |
+          aws ecr list-images \
+            --repository-name ${SERVICE} \
+            --region ${AWS_REGION}
+
+#########################################################
+# BUILD SUMMARY
+#########################################################
+
+      - name: Build Summary
+        run: |
+          echo ""
+          echo "========================================="
+          echo "Docker Build Completed Successfully"
+          echo "========================================="
+          echo "Service   : ${SERVICE}"
+          echo "Image Tag : ${IMAGE_TAG}"
+          echo "Registry  : ${ECR_REGISTRY}"
+          echo "========================================="
+
+#########################################################
+# REMOVE LOCAL IMAGES
+#########################################################
+
+      - name: Remove Local Images
+        if: always()
+        run: |
+          docker image rm ${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/${SERVICE}:latest || true
+
+#########################################################
+# DOCKER CLEANUP
+#########################################################
+
+      - name: Docker Cleanup
+        if: always()
+        run: |
+          docker image prune -af || true
+          docker builder prune -af || true
+
+#########################################################
+# LOGOUT ECR
+#########################################################
+
+      - name: Logout Amazon ECR
+        if: always()
+        run: |
+          docker logout ${ECR_REGISTRY} || true
