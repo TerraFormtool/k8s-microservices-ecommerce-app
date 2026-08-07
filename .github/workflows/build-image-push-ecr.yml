@@ -373,7 +373,7 @@ jobs:
 
       - name: Trivy Filesystem Scan
         run: |
-          trivy fs src/${SERVICE} \
+          trivy fs ${SERVICE} \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format sarif \
@@ -390,7 +390,7 @@ jobs:
             --ignore-unfixed \
             --format sarif \
             --output reports/trivy-image.sarif \
-            src/${SERVICE}:${IMAGE_TAG}
+            ${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # TRIVY HTML REPORT
@@ -403,7 +403,7 @@ jobs:
               --format template \
               --template "@/usr/local/share/trivy/templates/html.tpl" \
               --output reports/trivy-report.html \
-              src/${SERVICE}:${IMAGE_TAG}
+              ${SERVICE}:${IMAGE_TAG}
           else
             echo "HTML template not found. Skipping HTML report."
           fi
