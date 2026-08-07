@@ -98,17 +98,17 @@ jobs:
 
       - name: Detect Runtime
         run: |
-          if [[ "src/${SERVICE}" == "ui" || \
-                "src/${SERVICE}" == "cart" || \
-                "src/${SERVICE}" == "orders" ]]; then
+          if [[ "${SERVICE}" == "ui" || \
+                "${SERVICE}" == "cart" || \
+                "${SERVICE}" == "orders" ]]; then
 
             echo "RUNTIME=java" >> $GITHUB_ENV
 
-          elif [[ "src/${SERVICE}" == "checkout" ]]; then
+          elif [[ "${SERVICE}" == "checkout" ]]; then
 
             echo "RUNTIME=node" >> $GITHUB_ENV
 
-          elif [[ "src/${SERVICE}" == "catalog" ]]; then
+          elif [[ "${SERVICE}" == "catalog" ]]; then
 
             echo "RUNTIME=go" >> $GITHUB_ENV
 
