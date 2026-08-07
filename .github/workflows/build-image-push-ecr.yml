@@ -87,8 +87,8 @@ jobs:
 
       - name: Verify Service Folder
         run: |
-          if [ ! -d "src/src/${SERVICE}" ]; then
-            echo "ERROR: src/src/${SERVICE} directory not found."
+          if [ ! -d "src/${SERVICE}" ]; then
+            echo "ERROR: src/${SERVICE} directory not found."
             exit 1
           fi
 
