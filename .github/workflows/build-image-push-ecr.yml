@@ -347,9 +347,9 @@ jobs:
           docker build \
             --pull \
             --no-cache \
-            -t src/${SERVICE}:${IMAGE_TAG} \
+            -t ${SERVICE}:${IMAGE_TAG} \
             -f src/${SERVICE}/Dockerfile \
-            src/${SERVICE}
+            .
 
 #########################################################
 # VERIFY LOCAL IMAGE
