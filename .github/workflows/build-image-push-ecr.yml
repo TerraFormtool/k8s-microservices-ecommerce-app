@@ -226,7 +226,7 @@ jobs:
       - name: Build Java Service
         if: env.RUNTIME == 'java'
         run: |
-          cd src/src/${SERVICE}
+          cd src/${SERVICE}
 
           mvn clean package \
             -DskipTests
@@ -238,7 +238,7 @@ jobs:
       - name: Build Node Service
         if: env.RUNTIME == 'node'
         run: |
-          cd src/src/${SERVICE}
+          cd src/${SERVICE}
 
           if [ -f yarn.lock ]; then
 
@@ -267,7 +267,7 @@ jobs:
       - name: Build Go Service
         if: env.RUNTIME == 'go'
         run: |
-          cd src/src/${SERVICE}
+          cd src/${SERVICE}
 
           go mod download
 
