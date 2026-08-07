@@ -75,7 +75,7 @@ jobs:
           echo "Repository   : ${GITHUB_REPOSITORY}"
           echo "Branch       : ${GITHUB_REF_NAME}"
           echo "Commit       : ${GITHUB_SHA}"
-          echo "Service      : ${SERVICE}"
+          echo "Service      : src/${SERVICE}"
           echo "Image Tag    : ${IMAGE_TAG}"
           echo "AWS Region   : ${AWS_REGION}"
           echo "Runner       : ${RUNNER_NAME}"
@@ -87,8 +87,8 @@ jobs:
 
       - name: Verify Service Folder
         run: |
-          if [ ! -d "${SERVICE}" ]; then
-            echo "ERROR: ${SERVICE} directory not found."
+          if [ ! -d "src/src/${SERVICE}" ]; then
+            echo "ERROR: src/src/${SERVICE} directory not found."
             exit 1
           fi
 
@@ -98,17 +98,17 @@ jobs:
 
       - name: Detect Runtime
         run: |
-          if [[ "${SERVICE}" == "ui" || \
-                "${SERVICE}" == "cart" || \
-                "${SERVICE}" == "orders" ]]; then
+          if [[ "src/${SERVICE}" == "ui" || \
+                "src/${SERVICE}" == "cart" || \
+                "src/${SERVICE}" == "orders" ]]; then
 
             echo "RUNTIME=java" >> $GITHUB_ENV
 
-          elif [[ "${SERVICE}" == "checkout" ]]; then
+          elif [[ "src/${SERVICE}" == "checkout" ]]; then
 
             echo "RUNTIME=node" >> $GITHUB_ENV
 
-          elif [[ "${SERVICE}" == "catalog" ]]; then
+          elif [[ "src/${SERVICE}" == "catalog" ]]; then
 
             echo "RUNTIME=go" >> $GITHUB_ENV
 
@@ -226,7 +226,7 @@ jobs:
       - name: Build Java Service
         if: env.RUNTIME == 'java'
         run: |
-          cd ${SERVICE}
+          cd src/src/${SERVICE}
 
           mvn clean package \
             -DskipTests
@@ -238,7 +238,7 @@ jobs:
       - name: Build Node Service
         if: env.RUNTIME == 'node'
         run: |
-          cd ${SERVICE}
+          cd src/src/${SERVICE}
 
           if [ -f yarn.lock ]; then
 
@@ -267,7 +267,7 @@ jobs:
       - name: Build Go Service
         if: env.RUNTIME == 'go'
         run: |
-          cd ${SERVICE}
+          cd src/src/${SERVICE}
 
           go mod download
 
@@ -309,11 +309,11 @@ jobs:
         run: |
 
           aws ecr describe-repositories \
-            --repository-names ${SERVICE} \
+            --repository-names src/${SERVICE} \
             --region ${AWS_REGION} >/dev/null 2>&1 || \
 
           aws ecr create-repository \
-            --repository-name ${SERVICE} \
+            --repository-name src/${SERVICE} \
             --image-scanning-configuration scanOnPush=true \
             --region ${AWS_REGION}
 
@@ -324,7 +324,7 @@ jobs:
       - name: Verify Repository
         run: |
           aws ecr describe-repositories \
-            --repository-names ${SERVICE} \
+            --repository-names src/${SERVICE} \
             --region ${AWS_REGION}
 
 #########################################################
@@ -333,8 +333,8 @@ jobs:
 
       - name: Verify Dockerfile
         run: |
-          if [ ! -f "${SERVICE}/Dockerfile" ]; then
-            echo "ERROR: Dockerfile not found in ${SERVICE}"
+          if [ ! -f "src/src/${SERVICE}/Dockerfile" ]; then
+            echo "ERROR: Dockerfile not found in src/${SERVICE}"
             exit 1
           fi
 
@@ -347,9 +347,9 @@ jobs:
           docker build \
             --pull \
             --no-cache \
-            -t ${SERVICE}:${IMAGE_TAG} \
-            -f ${SERVICE}/Dockerfile \
-            ${SERVICE}
+            -t src/src/${SERVICE}:${IMAGE_TAG} \
+            -f src/src/${SERVICE}/Dockerfile \
+            src/${SERVICE}
 
 #########################################################
 # VERIFY LOCAL IMAGE
@@ -357,7 +357,7 @@ jobs:
 
       - name: Verify Docker Image
         run: |
-          docker image inspect ${SERVICE}:${IMAGE_TAG}
+          docker image inspect src/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # CREATE REPORT DIRECTORY
@@ -373,7 +373,7 @@ jobs:
 
       - name: Trivy Filesystem Scan
         run: |
-          trivy fs ${SERVICE} \
+          trivy fs src/${SERVICE} \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format sarif \
@@ -390,7 +390,7 @@ jobs:
             --ignore-unfixed \
             --format sarif \
             --output reports/trivy-image.sarif \
-            ${SERVICE}:${IMAGE_TAG}
+            src/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # TRIVY HTML REPORT
@@ -403,7 +403,7 @@ jobs:
               --format template \
               --template "@/usr/local/share/trivy/templates/html.tpl" \
               --output reports/trivy-report.html \
-              ${SERVICE}:${IMAGE_TAG}
+              src/${SERVICE}:${IMAGE_TAG}
           else
             echo "HTML template not found. Skipping HTML report."
           fi
@@ -445,8 +445,8 @@ jobs:
       - name: Tag SHA Image
         run: |
           docker tag \
-            ${SERVICE}:${IMAGE_TAG} \
-            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+            src/${SERVICE}:${IMAGE_TAG} \
+            ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # TAG IMAGE (LATEST)
@@ -455,8 +455,8 @@ jobs:
       - name: Tag Latest Image
         run: |
           docker tag \
-            ${SERVICE}:${IMAGE_TAG} \
-            ${ECR_REGISTRY}/${SERVICE}:latest
+            src/${SERVICE}:${IMAGE_TAG} \
+            ${ECR_REGISTRY}/src/${SERVICE}:latest
 
 #########################################################
 # PUSH SHA IMAGE
@@ -465,7 +465,7 @@ jobs:
       - name: Push SHA Image
         run: |
           docker push \
-            ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}
+            ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG}
 
 #########################################################
 # PUSH LATEST IMAGE
@@ -474,7 +474,7 @@ jobs:
       - name: Push Latest Image
         run: |
           docker push \
-            ${ECR_REGISTRY}/${SERVICE}:latest
+            ${ECR_REGISTRY}/src/${SERVICE}:latest
 
 #########################################################
 # VERIFY ECR IMAGE
@@ -483,7 +483,7 @@ jobs:
       - name: Verify Image in ECR
         run: |
           aws ecr describe-images \
-            --repository-name ${SERVICE} \
+            --repository-name src/${SERVICE} \
             --image-ids imageTag=${IMAGE_TAG} \
             --region ${AWS_REGION}
 
@@ -494,7 +494,7 @@ jobs:
       - name: Verify Latest Tag
         run: |
           aws ecr describe-images \
-            --repository-name ${SERVICE} \
+            --repository-name src/${SERVICE} \
             --image-ids imageTag=latest \
             --region ${AWS_REGION}
 
@@ -505,7 +505,7 @@ jobs:
       - name: Display ECR Images
         run: |
           aws ecr list-images \
-            --repository-name ${SERVICE} \
+            --repository-name src/${SERVICE} \
             --region ${AWS_REGION}
 
 #########################################################
@@ -518,7 +518,7 @@ jobs:
           echo "========================================="
           echo "Docker Build Completed Successfully"
           echo "========================================="
-          echo "Service   : ${SERVICE}"
+          echo "Service   : src/${SERVICE}"
           echo "Image Tag : ${IMAGE_TAG}"
           echo "Registry  : ${ECR_REGISTRY}"
           echo "========================================="
@@ -530,9 +530,9 @@ jobs:
       - name: Remove Local Images
         if: always()
         run: |
-          docker image rm ${SERVICE}:${IMAGE_TAG} || true
-          docker image rm ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG} || true
-          docker image rm ${ECR_REGISTRY}/${SERVICE}:latest || true
+          docker image rm src/${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/src/${SERVICE}:${IMAGE_TAG} || true
+          docker image rm ${ECR_REGISTRY}/src/${SERVICE}:latest || true
 
 #########################################################
 # DOCKER CLEANUP
