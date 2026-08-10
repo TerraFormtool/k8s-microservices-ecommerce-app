@@ -1,0 +1,96 @@
+version: "3.9"
+
+services:
+
+  #########################################################
+  # CART SERVICE
+  #########################################################
+
+  cart:
+    image: ${ECR_REGISTRY}/cart:latest
+    container_name: cart
+    hostname: cart
+    restart: always
+
+    ports:
+      - "8082:8080"
+
+    environment:
+      SERVER_TOMCAT_ACCESSLOG_ENABLED: "true"
+
+      RETAIL_CART_PERSISTENCE_PROVIDER: "dynamodb"
+
+      RETAIL_CART_PERSISTENCE_DYNAMODB_ENDPOINT: "http://carts-db:8000"
+
+      RETAIL_CART_PERSISTENCE_DYNAMODB_CREATE_TABLE: "true"
+
+      # DynamoDB Local does not require real AWS credentials
+      AWS_ACCESS_KEY_ID: "key"
+      AWS_SECRET_ACCESS_KEY: "dummy"
+
+    depends_on:
+      carts-db:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health || exit 1"
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - retail-network
+
+  #########################################################
+  # DYNAMODB LOCAL
+  #########################################################
+
+  carts-db:
+    image: amazon/dynamodb-local:1.20.0
+    container_name: carts-db
+    hostname: carts-db
+    restart: always
+
+    command:
+      - "-jar"
+      - "DynamoDBLocal.jar"
+      - "-sharedDb"
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "exit 0"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - retail-network
+
+#########################################################
+# NETWORK
+#########################################################
+
+networks:
+  retail-network:
+    external: true
+
+#########################################################
+# VOLUME
+#########################################################
+
+volumes:
+  dynamodb-data:
