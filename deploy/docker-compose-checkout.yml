@@ -1,0 +1,109 @@
+version: "3.9"
+
+services:
+
+  #########################################################
+  # CHECKOUT SERVICE
+  #########################################################
+
+  checkout:
+    image: ${ECR_REGISTRY}/checkout:latest
+    container_name: checkout
+    hostname: checkout
+
+    restart: always
+
+    ports:
+      - "8085:8080"
+
+    environment:
+
+      #####################################################
+      # CHECKOUT SERVER
+      #####################################################
+
+      PORT: "8080"
+
+      #####################################################
+      # REDIS PERSISTENCE
+      #####################################################
+
+      RETAIL_CHECKOUT_PERSISTENCE_PROVIDER: "redis"
+      RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL: "redis://checkout-redis:6379"
+
+      #####################################################
+      # ORDERS SERVICE
+      #####################################################
+
+      RETAIL_CHECKOUT_ENDPOINTS_ORDERS: "http://orders:8080"
+
+    depends_on:
+      checkout-redis:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - retail-network
+
+  #########################################################
+  # REDIS
+  #########################################################
+
+  checkout-redis:
+    image: redis:7-alpine
+    container_name: checkout-redis
+    hostname: checkout-redis
+
+    restart: always
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - checkout-redis-data:/data
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - retail-network
+
+#########################################################
+# NETWORK
+#########################################################
+
+networks:
+  retail-network:
+    external: true
+
+#########################################################
+# VOLUMES
+#########################################################
+
+volumes:
+  checkout-redis-data:
+    driver: local
