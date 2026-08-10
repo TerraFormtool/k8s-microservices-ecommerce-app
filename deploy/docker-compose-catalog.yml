@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+
+  #########################################################
+  # CATALOG SERVICE
+  #########################################################
+
+  catalog:
+    image: ${ECR_REGISTRY}/catalog:latest
+    container_name: catalog
+    hostname: catalog
+
+    restart: always
+
+    ports:
+      - "8081:8080"
+
+    environment:
+
+      #####################################################
+      # SERVER
+      #####################################################
+
+      PORT: "8080"
+
+      #####################################################
+      # DATABASE
+      #####################################################
+
+      RETAIL_CATALOG_PERSISTENCE_PROVIDER: "mysql"
+      RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "catalog-db:3306"
+      RETAIL_CATALOG_PERSISTENCE_DB_NAME: "catalogdb"
+      RETAIL_CATALOG_PERSISTENCE_USER: "catalog_user"
+      RETAIL_CATALOG_PERSISTENCE_PASSWORD: "${DB_PASSWORD}"
+      RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT: "10"
+
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://localhost:8080/health || exit 1"
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - retail-network
+
+  #########################################################
+  # MYSQL DATABASE
+  #########################################################
+
+  catalog-db:
+    image: mysql:8.0
+    container_name: catalog-db
+    hostname: catalog-db
+
+    restart: always
+
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_DATABASE: "catalogdb"
+      MYSQL_USER: "catalog_user"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - catalog-db-data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u root -p${DB_PASSWORD} --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - retail-network
+
+#########################################################
+# NETWORK
+#########################################################
+
+networks:
+  retail-network:
+    external: true
+
+#########################################################
+# VOLUMES
+#########################################################
+
+volumes:
+  catalog-db-data:
+    driver: local
