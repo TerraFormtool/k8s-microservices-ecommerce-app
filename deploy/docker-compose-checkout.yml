@@ -45,7 +45,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -f http://localhost:8080/health || exit 1"
+          "wget -q --spider http://localhost:8080/health || exit 1"
         ]
       interval: 20s
       timeout: 10s
