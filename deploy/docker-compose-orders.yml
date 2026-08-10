@@ -2,14 +2,13 @@ version: "3.9"
 
 services:
 
-  #########################################################
-  # ORDERS SERVICE
-  #########################################################
-
   orders:
-    image: ${ECR_REGISTRY}/orders:latest
+
+    image: ${ECR_REGISTRY}/orders:${IMAGE_TAG}
+
     container_name: orders
     hostname: orders
+
     restart: always
 
     ports:
@@ -17,75 +16,65 @@ services:
 
     environment:
 
-      #####################################################
-      # SERVER
-      #####################################################
-
       SERVER_PORT: "8080"
 
-      #####################################################
-      # POSTGRESQL
-      #####################################################
-
+      # PostgreSQL
       RETAIL_ORDERS_PERSISTENCE_PROVIDER: "postgres"
-      RETAIL_ORDERS_PERSISTENCE_POSTGRES_ENDPOINT: "orders-db:5432"
-      RETAIL_ORDERS_PERSISTENCE_POSTGRES_DBNAME: "orders"
-      RETAIL_ORDERS_PERSISTENCE_POSTGRES_USERNAME: "orders_user"
-      RETAIL_ORDERS_PERSISTENCE_POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      RETAIL_ORDERS_PERSISTENCE_ENDPOINT: "orders-db:5432"
+      RETAIL_ORDERS_PERSISTENCE_NAME: "orders"
+      RETAIL_ORDERS_PERSISTENCE_USERNAME: "orders_user"
+      RETAIL_ORDERS_PERSISTENCE_PASSWORD: "${DB_PASSWORD}"
 
-      #####################################################
-      # RABBITMQ
-      #####################################################
-
+      # RabbitMQ
       RETAIL_ORDERS_MESSAGING_PROVIDER: "rabbitmq"
       RETAIL_ORDERS_MESSAGING_RABBITMQ_ADDRESSES: "rabbitmq:5672"
       RETAIL_ORDERS_MESSAGING_RABBITMQ_USERNAME: "rabbitmq"
       RETAIL_ORDERS_MESSAGING_RABBITMQ_PASSWORD: "${DB_PASSWORD}"
 
-      #####################################################
-      # SQS
-      #####################################################
-
-      RETAIL_ORDERS_MESSAGING_SQS_TOPIC: ""
-
-      #####################################################
-      # OPENTELEMETRY
-      #####################################################
-
+      # OTEL
       OTEL_SDK_DISABLED: "true"
 
     depends_on:
+
       orders-db:
         condition: service_healthy
 
       rabbitmq:
-        condition: service_healthy
+        condition: service_started
 
     healthcheck:
+
       test:
         [
           "CMD-SHELL",
           "curl -f http://localhost:8080/actuator/health || exit 1"
         ]
+
       interval: 20s
       timeout: 10s
       retries: 5
-      start_period: 40s
+      start_period: 30s
 
     networks:
       - retail-network
 
+
   #########################################################
-  # POSTGRESQL
+  # POSTGRES
   #########################################################
 
   orders-db:
+
     image: postgres:16
+
     container_name: orders-db
+
     hostname: orders-db
+
     restart: always
 
     environment:
+
       POSTGRES_DB: "orders"
       POSTGRES_USER: "orders_user"
       POSTGRES_PASSWORD: "${DB_PASSWORD}"
@@ -94,14 +83,17 @@ services:
       - "5432:5432"
 
     volumes:
+
       - postgres-data:/var/lib/postgresql/data
 
     healthcheck:
+
       test:
         [
           "CMD-SHELL",
           "pg_isready -U orders_user -d orders"
         ]
+
       interval: 10s
       timeout: 5s
       retries: 10
@@ -110,25 +102,33 @@ services:
     networks:
       - retail-network
 
+
   #########################################################
   # RABBITMQ
   #########################################################
 
   rabbitmq:
+
     image: rabbitmq:3-management
+
     container_name: rabbitmq
+
     hostname: rabbitmq
+
     restart: always
 
     environment:
+
       RABBITMQ_DEFAULT_USER: "rabbitmq"
       RABBITMQ_DEFAULT_PASS: "${DB_PASSWORD}"
 
     ports:
+
       - "5672:5672"
       - "15672:15672"
 
     healthcheck:
+
       test:
         [
           "CMD",
@@ -136,25 +136,29 @@ services:
           "-q",
           "ping"
         ]
+
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 20s
 
     networks:
       - retail-network
+
 
 #########################################################
 # NETWORK
 #########################################################
 
 networks:
+
   retail-network:
     external: true
+
 
 #########################################################
 # VOLUMES
 #########################################################
 
 volumes:
+
   postgres-data:
