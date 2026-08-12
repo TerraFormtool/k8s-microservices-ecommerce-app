@@ -101,20 +101,20 @@ module "eks" {
     }
   }
 
-  #access_entries = {
-  # admin = {
-  #  principal_arn = var.eks_admin_principal_arn
+  access_entries = {
+   admin = {
+    principal_arn = var.eks_admin_principal_arn
 
-  #policy_associations = {
-  #admin = {
-  #policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  policy_associations = {
+  admin = {
+  policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
-  #access_scope = {
-  #type = "cluster"
-  #}
-  #}
-  #}
-  #}
+  access_scope = {
+  type = "cluster"
+  }
+  }
+  }
+  }
 
   # Uncomment later if needed
   #github_actions = {
@@ -130,7 +130,7 @@ module "eks" {
   #     }
   #  }
   #}
-  #}
+}
 
   tags = {
     Name        = var.cluster_name
