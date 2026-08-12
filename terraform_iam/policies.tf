@@ -77,13 +77,29 @@ resource "aws_iam_user_policy" "app_01_policy" {
 
         Action = [
           "kms:CreateKey",
-          "kms:TagResource",
           "kms:DescribeKey",
           "kms:CreateAlias",
-          "kms:EnableKeyRotation",
-          "kms:PutKeyPolicy",
+
           "kms:DeleteAlias",
-          "kms:UpdateAlias"
+
+          "kms:UpdateAlias",
+
+          "kms:EnableKeyRotation",
+
+          "kms:GetKeyRotationStatus",
+
+          "kms:PutKeyPolicy",
+ 
+          "kms:GetKeyPolicy",
+
+          "kms:ListResourceTags",
+
+          "kms:TagResource",
+
+          "kms:UntagResource",
+          "kms:ScheduleKeyDeletion",
+
+          "kms:CancelKeyDeletion"
         ]
 
         Resource = "*"
