@@ -59,6 +59,7 @@ resource "aws_iam_user_policy" "app_01_policy" {
         Action = [
           "eks:CreateAddon",
           "eks:DescribeAddon",
+          "eks:DescribeAddonVersions",
           "eks:ListAddons",
           "eks:UpdateAddon",
           "eks:DeleteAddon"
