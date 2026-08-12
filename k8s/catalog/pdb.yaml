@@ -1,1 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: catalog
+  namespace: retail
 
+spec:
+
+  minAvailable: 1
+
+  selector:
+    matchLabels:
+      app: catalog
