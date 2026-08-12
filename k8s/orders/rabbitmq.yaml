@@ -1,1 +1,132 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: retail
 
+spec:
+
+  type: ClusterIP
+
+  selector:
+    app: rabbitmq
+
+  ports:
+
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+
+    - name: management
+      port: 15672
+      targetPort: 15672
+
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: retail
+
+spec:
+
+  serviceName: rabbitmq
+
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: rabbitmq
+
+  template:
+
+    metadata:
+      labels:
+        app: rabbitmq
+
+    spec:
+
+      terminationGracePeriodSeconds: 60
+
+      containers:
+
+        - name: rabbitmq
+
+          image: rabbitmq:3-management
+
+          ports:
+
+            - name: amqp
+              containerPort: 5672
+
+            - name: management
+              containerPort: 15672
+
+          env:
+
+            - name: RABBITMQ_DEFAULT_USER
+              value: rabbitmq
+
+            - name: RABBITMQ_DEFAULT_PASS
+
+              valueFrom:
+                secretKeyRef:
+                  name: retail-secrets
+                  key: RABBITMQ_PASSWORD
+
+          resources:
+
+            requests:
+              cpu: 250m
+              memory: 512Mi
+
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          readinessProbe:
+
+            exec:
+
+              command:
+                - rabbitmq-diagnostics
+                - -q
+                - ping
+
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+          livenessProbe:
+
+            exec:
+
+              command:
+                - rabbitmq-diagnostics
+                - -q
+                - ping
+
+            initialDelaySeconds: 60
+            periodSeconds: 20
+
+          volumeMounts:
+
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+
+  volumeClaimTemplates:
+
+    - metadata:
+        name: rabbitmq-data
+
+      spec:
+
+        accessModes:
+          - ReadWriteOnce
+
+        storageClassName: gp3
+
+        resources:
+
+          requests:
+            storage: 10Gi
