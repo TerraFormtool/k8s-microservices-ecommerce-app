@@ -50,7 +50,7 @@ module "eks" {
   cluster_endpoint_private_access = true
 
   authentication_mode                      = "API"
-  enable_cluster_creator_admin_permissions = true
+  enable_cluster_creator_admin_permissions = false
   enable_irsa                              = true
 
   cluster_enabled_log_types = [
