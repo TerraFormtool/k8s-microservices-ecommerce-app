@@ -130,7 +130,7 @@ module "eks" {
     #     }
     #  }
     #}
-  }
+  #}
 
   tags = {
     Name        = var.cluster_name
