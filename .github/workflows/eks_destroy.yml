@@ -1,0 +1,153 @@
+name: Terraform Destroy EKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Select Environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+
+  terraform-destroy:
+
+    runs-on: self-hosted
+
+    environment: ${{ github.event.inputs.target_env }}
+
+    defaults:
+      run:
+        working-directory: eks-terraform
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+
+      #################################################
+      # Checkout Repository
+      #################################################
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      #################################################
+      # Setup Terraform
+      #################################################
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      #################################################
+      # Configure AWS Credentials (Access Key)
+      #################################################
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      #################################################
+      # Verify AWS Identity
+      #################################################
+
+      - name: Verify AWS Identity
+        run: aws sts get-caller-identity
+
+      #################################################
+      # Terraform Version
+      #################################################
+
+      - name: Terraform Version
+        run: terraform version
+
+      #################################################
+      # Terraform Format
+      #################################################
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      #################################################
+      # Terraform Init
+      #################################################
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -reconfigure \
+            -backend-config=backend/${{ github.event.inputs.target_env }}.hcl
+
+      #################################################
+      # Terraform Validate
+      #################################################
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      #################################################
+      # Terraform Destroy Plan
+      #################################################
+
+      - name: Terraform Destroy Plan
+        run: |
+          terraform plan \
+            -destroy \
+            -var-file=environments/${{ github.event.inputs.target_env }}.tfvars \
+            -out=destroy.tfplan
+
+      #################################################
+      # Terraform Destroy
+      #################################################
+
+      - name: Terraform Destroy
+        run: |
+          terraform apply -auto-approve destroy.tfplan
+
+      #################################################
+      # Verify Remaining Clusters
+      #################################################
+
+      - name: Verify Remaining Clusters
+        run: |
+          aws eks list-clusters \
+            --region "$AWS_REGION"
+
+      #################################################
+      # Verify Remaining VPCs
+      #################################################
+
+      - name: Verify Remaining VPCs
+        run: |
+          aws ec2 describe-vpcs \
+            --query "Vpcs[*].[VpcId,CidrBlock]" \
+            --output table
+
+      #################################################
+      # Verify Remaining NAT Gateways
+      #################################################
+
+      - name: Verify NAT Gateways
+        run: |
+          aws ec2 describe-nat-gateways \
+            --query "NatGateways[*].[NatGatewayId,State]" \
+            --output table
+
+      #################################################
+      # Verify Remaining Internet Gateways
+      #################################################
+
+      - name: Verify Internet Gateways
+        run: |
+          aws ec2 describe-internet-gateways \
+            --query "InternetGateways[*].[InternetGatewayId]" \
+            --output table
