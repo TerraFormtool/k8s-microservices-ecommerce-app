@@ -1,7 +1,3 @@
-############################################
-# APP Inline Policy
-############################################
-
 resource "aws_iam_user_policy" "app_01_policy" {
   name = "app_policy"
   user = aws_iam_user.app.name
@@ -14,7 +10,6 @@ resource "aws_iam_user_policy" "app_01_policy" {
       ########################################
       # EKS Cluster Management
       ########################################
-
       {
         Sid    = "EKSClusterManagement"
         Effect = "Allow"
@@ -51,7 +46,6 @@ resource "aws_iam_user_policy" "app_01_policy" {
       ########################################
       # EKS Add-on Management
       ########################################
-
       {
         Sid    = "EKSAddonPermissions"
         Effect = "Allow"
@@ -71,7 +65,6 @@ resource "aws_iam_user_policy" "app_01_policy" {
       ########################################
       # KMS Management
       ########################################
-
       {
         Sid    = "KMSPermissions"
         Effect = "Allow"
@@ -91,6 +84,28 @@ resource "aws_iam_user_policy" "app_01_policy" {
           "kms:UntagResource",
           "kms:ScheduleKeyDeletion",
           "kms:CancelKeyDeletion"
+        ]
+
+        Resource = "*"
+      },
+
+      ########################################
+      # CloudFormation Permissions
+      ########################################
+      {
+        Sid    = "CloudFormationPermissions"
+        Effect = "Allow"
+
+        Action = [
+          "cloudformation:ListStacks",
+          "cloudformation:DescribeStacks",
+          "cloudformation:CreateStack",
+          "cloudformation:UpdateStack",
+          "cloudformation:DeleteStack",
+          "cloudformation:DescribeStackEvents",
+          "cloudformation:DescribeStackResources",
+          "cloudformation:GetTemplate",
+          "cloudformation:ListStackResources"
         ]
 
         Resource = "*"
