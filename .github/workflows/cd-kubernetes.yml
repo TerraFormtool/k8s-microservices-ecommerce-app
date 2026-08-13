@@ -1,0 +1,439 @@
+name: CD - Kubernetes Deploy
+
+on:
+
+  workflow_dispatch:
+
+    inputs:
+
+      service:
+        description: "Select Service"
+        required: true
+        type: choice
+        options:
+          - ui
+          - cart
+          - orders
+          - checkout
+          - catalog
+
+      environment:
+        description: "Deployment Environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+      image_tag:
+        description: "Image tag - leave empty to use Git SHA"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kubernetes-${{ github.event.inputs.environment }}-${{ github.event.inputs.service }}
+  cancel-in-progress: false
+
+
+env:
+
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+  NAMESPACE: retail
+
+  SERVICE: ${{ github.event.inputs.service }}
+
+  ENVIRONMENT: ${{ github.event.inputs.environment }}
+
+  IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
+
+
+jobs:
+
+  deploy:
+
+    name: Deploy ${{ github.event.inputs.service }}
+
+    runs-on: self-hosted
+
+    environment:
+      name: ${{ github.event.inputs.environment }}
+
+
+    defaults:
+
+      run:
+        shell: bash
+
+
+    steps:
+
+      #########################################################
+      # CHECKOUT
+      #########################################################
+
+      - name: Checkout Repository
+
+        uses: actions/checkout@v4
+
+
+      #########################################################
+      # DISPLAY INFORMATION
+      #########################################################
+
+      - name: Display Deployment Information
+
+        run: |
+
+          echo "=============================================="
+          echo "KUBERNETES DEPLOYMENT"
+          echo "=============================================="
+
+          echo "Service      : ${SERVICE}"
+          echo "Environment  : ${ENVIRONMENT}"
+          echo "Namespace    : ${NAMESPACE}"
+          echo "Image Tag    : ${IMAGE_TAG}"
+          echo "Registry     : ${ECR_REGISTRY}"
+
+          echo "=============================================="
+
+
+      #########################################################
+      # VERIFY TOOLS
+      #########################################################
+
+      - name: Verify Kubernetes Tools
+
+        run: |
+
+          kubectl version --client
+
+          aws --version
+
+
+      #########################################################
+      # AWS CREDENTIALS
+      #########################################################
+
+      - name: Configure AWS Credentials
+
+        run: |
+
+          aws configure set aws_access_key_id \
+            "${{ secrets.AWS_ACCESS_KEY_ID }}"
+
+          aws configure set aws_secret_access_key \
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+
+          aws configure set region \
+            "${AWS_REGION}"
+
+
+      #########################################################
+      # EKS LOGIN
+      #########################################################
+
+      - name: Configure EKS
+
+        run: |
+
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}"
+
+
+      #########################################################
+      # VERIFY CLUSTER
+      #########################################################
+
+      - name: Verify Kubernetes Cluster
+
+        run: |
+
+          kubectl cluster-info
+
+          kubectl get nodes
+
+          kubectl get namespace "${NAMESPACE}"
+
+
+      #########################################################
+      # LOGIN TO ECR
+      #########################################################
+
+      - name: Login to Amazon ECR
+
+        run: |
+
+          aws ecr get-login-password \
+            --region "${AWS_REGION}" |
+
+          docker login \
+            --username AWS \
+            --password-stdin \
+            "${ECR_REGISTRY}"
+
+
+      #########################################################
+      # VERIFY ECR IMAGE
+      #########################################################
+
+      - name: Verify ECR Image
+
+        run: |
+
+          aws ecr describe-images \
+            --repository-name "${SERVICE}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --region "${AWS_REGION}"
+
+
+      #########################################################
+      # VERIFY MANIFEST
+      #########################################################
+
+      - name: Verify Kubernetes Manifest
+
+        run: |
+
+          if [ ! -f "k8s/${SERVICE}/deployment.yaml" ]; then
+
+            echo "ERROR: Deployment manifest not found"
+
+            echo "Expected:"
+            echo "k8s/${SERVICE}/deployment.yaml"
+
+            exit 1
+
+          fi
+
+          if [ ! -f "k8s/${SERVICE}/service.yaml" ]; then
+
+            echo "ERROR: Service manifest not found"
+
+            exit 1
+
+          fi
+
+          echo "Kubernetes manifests found."
+
+
+      #########################################################
+      # APPLY SERVICE
+      #########################################################
+
+      - name: Apply Service Manifest
+
+        run: |
+
+          kubectl apply \
+            -f "k8s/${SERVICE}/service.yaml" \
+            -n "${NAMESPACE}"
+
+
+      #########################################################
+      # APPLY HPA
+      #########################################################
+
+      - name: Apply HPA
+
+        run: |
+
+          if [ -f "k8s/${SERVICE}/hpa.yaml" ]; then
+
+            kubectl apply \
+              -f "k8s/${SERVICE}/hpa.yaml" \
+              -n "${NAMESPACE}"
+
+          else
+
+            echo "HPA manifest not found."
+
+          fi
+
+
+      #########################################################
+      # APPLY PDB
+      #########################################################
+
+      - name: Apply PDB
+
+        run: |
+
+          if [ -f "k8s/${SERVICE}/pdb.yaml" ]; then
+
+            kubectl apply \
+              -f "k8s/${SERVICE}/pdb.yaml" \
+              -n "${NAMESPACE}"
+
+          else
+
+            echo "PDB manifest not found."
+
+          fi
+
+
+      #########################################################
+      # APPLY DEPLOYMENT
+      #########################################################
+
+      - name: Apply Deployment
+
+        run: |
+
+          kubectl apply \
+            -f "k8s/${SERVICE}/deployment.yaml" \
+            -n "${NAMESPACE}"
+
+
+      #########################################################
+      # UPDATE IMAGE
+      #########################################################
+
+      - name: Update Kubernetes Image
+
+        run: |
+
+          IMAGE="${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}"
+
+          echo "Deploying:"
+          echo "${IMAGE}"
+
+          kubectl set image \
+            deployment/"${SERVICE}" \
+            "${SERVICE}"="${IMAGE}" \
+            -n "${NAMESPACE}"
+
+
+      #########################################################
+      # WAIT FOR ROLLOUT
+      #########################################################
+
+      - name: Wait For Rollout
+
+        run: |
+
+          kubectl rollout status \
+            deployment/"${SERVICE}" \
+            -n "${NAMESPACE}" \
+            --timeout=10m
+
+
+      #########################################################
+      # VERIFY DEPLOYMENT
+      #########################################################
+
+      - name: Verify Deployment
+
+        run: |
+
+          kubectl get deployment \
+            "${SERVICE}" \
+            -n "${NAMESPACE}" \
+            -o wide
+
+
+      #########################################################
+      # VERIFY PODS
+      #########################################################
+
+      - name: Verify Pods
+
+        run: |
+
+          kubectl get pods \
+            -n "${NAMESPACE}" \
+            -l app="${SERVICE}" \
+            -o wide
+
+
+      #########################################################
+      # VERIFY SERVICE
+      #########################################################
+
+      - name: Verify Service
+
+        run: |
+
+          kubectl get service \
+            "${SERVICE}" \
+            -n "${NAMESPACE}"
+
+
+      #########################################################
+      # VERIFY IMAGE
+      #########################################################
+
+      - name: Verify Running Image
+
+        run: |
+
+          kubectl get deployment \
+            "${SERVICE}" \
+            -n "${NAMESPACE}" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+          echo ""
+
+
+      #########################################################
+      # SHOW EVENTS
+      #########################################################
+
+      - name: Kubernetes Events
+
+        if: always()
+
+        run: |
+
+          kubectl get events \
+            -n "${NAMESPACE}" \
+            --sort-by='.lastTimestamp' \
+            | tail -50
+
+
+      #########################################################
+      # LOGS
+      #########################################################
+
+      - name: Display Application Logs
+
+        if: always()
+
+        run: |
+
+          kubectl logs \
+            deployment/"${SERVICE}" \
+            -n "${NAMESPACE}" \
+            --tail=100 \
+            --all-containers=true \
+            || true
+
+
+      #########################################################
+      # FINAL STATUS
+      #########################################################
+
+      - name: Deployment Summary
+
+        run: |
+
+          echo ""
+          echo "=============================================="
+          echo "KUBERNETES DEPLOYMENT SUCCESSFUL"
+          echo "=============================================="
+
+          echo "Service     : ${SERVICE}"
+          echo "Environment : ${ENVIRONMENT}"
+          echo "Namespace   : ${NAMESPACE}"
+          echo "Image       : ${ECR_REGISTRY}/${SERVICE}:${IMAGE_TAG}"
+
+          echo "=============================================="
