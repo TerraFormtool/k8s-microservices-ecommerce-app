@@ -1,3 +1,143 @@
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: orders-db
+#   namespace: retail
+
+# spec:
+
+#   type: ClusterIP
+
+#   selector:
+#     app: orders-db
+
+#   ports:
+
+#     - name: postgres
+#       port: 5432
+#       targetPort: 5432
+
+
+# ---
+# apiVersion: apps/v1
+# kind: StatefulSet
+# metadata:
+#   name: orders-db
+#   namespace: retail
+
+# spec:
+
+#   serviceName: orders-db
+
+#   replicas: 1
+
+#   selector:
+#     matchLabels:
+#       app: orders-db
+
+#   template:
+
+#     metadata:
+#       labels:
+#         app: orders-db
+
+#     spec:
+
+#       terminationGracePeriodSeconds: 60
+
+#       containers:
+
+#         - name: postgres
+
+#           image: postgres:16
+
+#           ports:
+
+#             - name: postgres
+#               containerPort: 5432
+
+#           env:
+
+#             - name: POSTGRES_DB
+#               value: orders
+
+#             - name: POSTGRES_USER
+#               value: orders_user
+
+#             - name: POSTGRES_PASSWORD
+
+#               valueFrom:
+#                 secretKeyRef:
+#                   name: retail-secrets
+#                   key: DB_PASSWORD
+
+#           resources:
+
+#             requests:
+#               cpu: 250m
+#               memory: 512Mi
+
+#             limits:
+#               cpu: "1"
+#               memory: 1Gi
+
+#           startupProbe:
+
+#             exec:
+
+#               command:
+#                 - pg_isready
+#                 - -U
+#                 - orders_user
+#                 - -d
+#                 - orders
+
+#             periodSeconds: 10
+#             failureThreshold: 30
+
+#           readinessProbe:
+
+#             exec:
+
+#               command:
+#                 - pg_isready
+#                 - -U
+#                 - orders_user
+#                 - -d
+#                 - orders
+
+#             periodSeconds: 10
+
+#           livenessProbe:
+
+#             exec:
+
+#               command:
+#                 - pg_isready
+#                 - -U
+#                 - orders_user
+#                 # - -d
+#                 - orders
+
+#             initialDelaySeconds: 60
+#             periodSeconds: 20
+
+#             - name: PGDATA
+#               value: /var/lib/postgresql/data/pgdata
+
+#           volumeMounts:
+
+#             - name: postgres-data
+#               mountPath: /var/lib/postgresql/data
+
+#   volumeClaimTemplates:
+
+#     - metadata:
+#         name: postgres-data
+
+
+
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -5,18 +145,15 @@ metadata:
   namespace: retail
 
 spec:
-
   type: ClusterIP
 
   selector:
     app: orders-db
 
   ports:
-
     - name: postgres
       port: 5432
       targetPort: 5432
-
 
 ---
 apiVersion: apps/v1
@@ -26,7 +163,6 @@ metadata:
   namespace: retail
 
 spec:
-
   serviceName: orders-db
 
   replicas: 1
@@ -36,43 +172,46 @@ spec:
       app: orders-db
 
   template:
-
     metadata:
       labels:
         app: orders-db
 
     spec:
-
       terminationGracePeriodSeconds: 60
 
       containers:
-
         - name: postgres
 
           image: postgres:16
 
           ports:
-
             - name: postgres
               containerPort: 5432
 
           env:
 
+            # PostgreSQL database
             - name: POSTGRES_DB
               value: orders
 
+            # PostgreSQL user
             - name: POSTGRES_USER
               value: orders_user
 
+            # PostgreSQL password
             - name: POSTGRES_PASSWORD
-
               valueFrom:
                 secretKeyRef:
                   name: retail-secrets
                   key: DB_PASSWORD
 
-          resources:
+            # IMPORTANT:
+            # Use a subdirectory inside the EBS mount.
+            # This avoids the lost+found problem.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
 
+          resources:
             requests:
               cpu: 250m
               memory: 512Mi
@@ -82,9 +221,7 @@ spec:
               memory: 1Gi
 
           startupProbe:
-
             exec:
-
               command:
                 - pg_isready
                 - -U
@@ -96,9 +233,7 @@ spec:
             failureThreshold: 30
 
           readinessProbe:
-
             exec:
-
               command:
                 - pg_isready
                 - -U
@@ -107,11 +242,10 @@ spec:
                 - orders
 
             periodSeconds: 10
+            failureThreshold: 3
 
           livenessProbe:
-
             exec:
-
               command:
                 - pg_isready
                 - -U
@@ -121,25 +255,34 @@ spec:
 
             initialDelaySeconds: 60
             periodSeconds: 20
+            failureThreshold: 3
 
           volumeMounts:
-
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
 
   volumeClaimTemplates:
-
     - metadata:
         name: postgres-data
 
       spec:
-
         accessModes:
           - ReadWriteOnce
 
         storageClassName: gp3
 
         resources:
-
           requests:
             storage: 20Gi
+
+#       spec:
+
+#         accessModes:
+#           - ReadWriteOnce
+
+#         storageClassName: gp3
+
+#         resources:
+
+#           requests:
+#             storage: 20Gi
