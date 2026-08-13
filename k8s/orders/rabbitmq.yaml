@@ -95,7 +95,7 @@ spec:
                 - ping
 
             initialDelaySeconds: 30
-            periodSeconds: 10
+            timeoutSeconds: 10
 
           livenessProbe:
 
@@ -107,7 +107,8 @@ spec:
                 - ping
 
             initialDelaySeconds: 60
-            periodSeconds: 20
+            timeoutSeconds: 10
+            periodSeconds: 30
 
           volumeMounts:
 
