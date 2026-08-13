@@ -1,0 +1,377 @@
+name: Kubernetes Bootstrap
+
+on:
+
+  workflow_dispatch:
+
+    inputs:
+
+      environment:
+        description: "Environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+
+permissions:
+
+  contents: read
+  id-token: write
+
+
+jobs:
+
+  bootstrap:
+
+    name: Bootstrap Kubernetes Infrastructure
+
+    runs-on: self-hosted
+
+    environment:
+      name: ${{ github.event.inputs.environment }}
+
+    defaults:
+
+      run:
+        shell: bash
+
+
+    steps:
+
+      #########################################################
+      # CHECKOUT
+      #########################################################
+
+      - name: Checkout Repository
+
+        uses: actions/checkout@v4
+
+
+      #########################################################
+      # DISPLAY INFORMATION
+      #########################################################
+
+      - name: Display Deployment Information
+
+        run: |
+
+          echo "=============================================="
+          echo "KUBERNETES BOOTSTRAP"
+          echo "=============================================="
+
+          echo "Environment : ${{ github.event.inputs.environment }}"
+          echo "=============================================="
+
+
+      #########################################################
+      # VERIFY TOOLS
+      #########################################################
+
+      - name: Verify Tools
+
+        run: |
+
+          aws --version
+
+          kubectl version --client
+
+
+      #########################################################
+      # AWS CREDENTIALS
+      #########################################################
+
+      - name: Configure AWS Credentials
+
+        run: |
+
+          aws configure set aws_access_key_id \
+            "${{ secrets.AWS_ACCESS_KEY_ID }}"
+
+          aws configure set aws_secret_access_key \
+            "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+
+          aws configure set region \
+            "${{ secrets.AWS_REGION }}"
+
+
+      #########################################################
+      # VERIFY AWS
+      #########################################################
+
+      - name: Verify AWS Identity
+
+        run: |
+
+          aws sts get-caller-identity
+
+
+      #########################################################
+      # CONFIGURE EKS
+      #########################################################
+
+      - name: Configure EKS
+
+        run: |
+
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}"
+
+
+      #########################################################
+      # VERIFY CLUSTER
+      #########################################################
+
+      - name: Verify Kubernetes Cluster
+
+        run: |
+
+          kubectl cluster-info
+
+          kubectl get nodes
+
+
+      #########################################################
+      # NAMESPACE
+      #########################################################
+
+      - name: Create Namespace
+
+        run: |
+
+          kubectl apply \
+            -f k8s/namespace.yaml
+
+          kubectl get namespace retail
+
+
+      #########################################################
+      # STORAGE
+      #########################################################
+
+      - name: Verify Storage Classes
+
+        run: |
+
+          echo "Available StorageClasses:"
+
+          kubectl get storageclass
+
+
+      #########################################################
+      # EBS CSI DRIVER
+      #########################################################
+
+      - name: Verify EBS CSI Driver
+
+        run: |
+
+          echo "Checking EBS CSI driver..."
+
+          kubectl get pods \
+            -n kube-system \
+            -l app.kubernetes.io/name=aws-ebs-csi-driver \
+            || true
+
+
+      #########################################################
+      # CONFIGMAP
+      #########################################################
+
+      - name: Apply ConfigMaps
+
+        run: |
+
+          if [ -f k8s/configmaps.yaml ]; then
+
+            kubectl apply \
+              -f k8s/configmaps.yaml \
+              -n retail
+
+          else
+
+            echo "configmaps.yaml not found"
+
+          fi
+
+
+      #########################################################
+      # SECRETS
+      #########################################################
+
+      - name: Apply Kubernetes Secrets
+
+        run: |
+
+          if [ -f k8s/secrets.yaml ]; then
+
+            kubectl apply \
+              -f k8s/secrets.yaml \
+              -n retail
+
+          else
+
+            echo "ERROR: k8s/secrets.yaml not found"
+
+            exit 1
+
+          fi
+
+
+      #########################################################
+      # VERIFY SECRETS
+      #########################################################
+
+      - name: Verify Secrets
+
+        run: |
+
+          kubectl get secret \
+            -n retail
+
+
+      #########################################################
+      # CATALOG DATABASE
+      #########################################################
+
+      - name: Deploy Catalog Database
+
+        run: |
+
+          kubectl apply \
+            -f k8s/catalog/mysql.yaml \
+            -n retail
+
+
+      #########################################################
+      # CART DATABASE
+      #########################################################
+
+      - name: Deploy Cart Database
+
+        run: |
+
+          kubectl apply \
+            -f k8s/cart/dynamodb.yaml \
+            -n retail
+
+
+      #########################################################
+      # ORDERS DATABASE
+      #########################################################
+
+      - name: Deploy PostgreSQL
+
+        run: |
+
+          kubectl apply \
+            -f k8s/orders/postgres.yaml \
+            -n retail
+
+
+      #########################################################
+      # RABBITMQ
+      #########################################################
+
+      - name: Deploy RabbitMQ
+
+        run: |
+
+          kubectl apply \
+            -f k8s/orders/rabbitmq.yaml \
+            -n retail
+
+
+      #########################################################
+      # CHECKOUT REDIS
+      #########################################################
+
+      - name: Deploy Redis
+
+        run: |
+
+          kubectl apply \
+            -f k8s/checkout/redis.yaml \
+            -n retail
+
+
+      #########################################################
+      # WAIT FOR INFRASTRUCTURE
+      #########################################################
+
+      - name: Wait For Infrastructure
+
+        run: |
+
+          echo "Waiting for infrastructure..."
+
+          sleep 30
+
+
+      #########################################################
+      # VERIFY PODS
+      #########################################################
+
+      - name: Verify Infrastructure Pods
+
+        run: |
+
+          kubectl get pods \
+            -n retail \
+            -o wide
+
+
+      #########################################################
+      # VERIFY SERVICES
+      #########################################################
+
+      - name: Verify Infrastructure Services
+
+        run: |
+
+          kubectl get svc \
+            -n retail
+
+
+      #########################################################
+      # VERIFY PVC
+      #########################################################
+
+      - name: Verify Persistent Volumes
+
+        run: |
+
+          kubectl get pvc \
+            -n retail
+
+
+      #########################################################
+      # FINAL STATUS
+      #########################################################
+
+      - name: Bootstrap Summary
+
+        run: |
+
+          echo ""
+          echo "=============================================="
+          echo "KUBERNETES BOOTSTRAP COMPLETED"
+          echo "=============================================="
+
+          echo "Environment : ${{ github.event.inputs.environment }}"
+
+          echo ""
+
+          kubectl get pods -n retail
+
+          echo ""
+
+          kubectl get svc -n retail
+
+          echo ""
+
+          kubectl get pvc -n retail
+
+          echo "=============================================="
