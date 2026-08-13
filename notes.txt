@@ -1,1 +1,617 @@
+Step 1 — Verify your EKS cluster
 
+Run:
+
+aws eks list-clusters --region us-east-1
+
+kubectl get nodes
+
+kubectl get pods -n retail
+
+kubectl get deployment -n kube-system aws-load-balancer-controller
+
+Step 2 — Set variables
+
+On your EC2/admin machine:
+
+export CLUSTER_NAME="YOUR-EKS-CLUSTER-NAME"
+export AWS_REGION="us-east-1"
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+echo $CLUSTER_NAME
+echo $AWS_REGION
+echo $AWS_ACCOUNT_ID
+
+
+Step 4 — Check eksctl
+eksctl version
+
+If installed, continue.
+
+Also check:
+
+helm version
+
+Step 5 — Configure OIDC
+
+Run:
+
+aws eks describe-cluster \
+  --name "$CLUSTER_NAME" \
+  --region "$AWS_REGION" \
+  --query 'cluster.identity.oidc.issuer' \
+  --output text
+
+eksctl utils associate-iam-oidc-provider \
+  --cluster "$CLUSTER_NAME" \
+  --region "$AWS_REGION" \
+  --approve
+
+If it says the provider already exists, that's okay.
+
+IRSA uses the cluster-specific OIDC provider for the controller's IAM permissions.
+
+Step 6 — Download IAM policy
+cd /tmp
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.1/docs/install/iam_policy.json
+
+ls -lh /tmp/iam_policy.json
+
+Step 7 — Create IAM policy
+aws iam create-policy \
+  --policy-name AWSLoadBalancerControllerIAMPolicy \
+  --policy-document file:///tmp/iam_policy.json
+
+If you get:
+
+EntityAlreadyExists
+
+don't worry. It means the policy already exists.
+
+Check:
+
+aws iam get-policy \
+  --policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy
+
+Step 8 — Create IAM ServiceAccount
+
+Run:
+
+eksctl create iamserviceaccount \
+  --cluster "$CLUSTER_NAME" \
+  --namespace kube-system \
+  --name aws-load-balancer-controller \
+  --attach-policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy \
+  --override-existing-serviceaccounts \
+  --region "$AWS_REGION" \
+  --approve
+
+This creates the relationship:
+
+IAM Policy
+     |
+     v
+IAM Role
+     |
+     v
+Kubernetes ServiceAccount
+     |
+     v
+aws-load-balancer-controller
+
+AWS documents this exact eksctl create iamserviceaccount approach.
+
+
+Step 9 — Verify ServiceAccount
+kubectl get serviceaccount \
+  aws-load-balancer-controller \
+  -n kube-system
+
+Then:
+
+kubectl get serviceaccount \
+  aws-load-balancer-controller \
+  -n kube-system \
+  -o yaml
+
+Look for:
+
+annotations:
+  eks.amazonaws.com/role-arn: arn:aws:iam::...
+
+
+Step 10 — Install Helm chart
+
+Add AWS's EKS chart repository:
+
+helm repo add eks https://aws.github.io/eks-charts
+
+Then:
+
+helm repo update eks
+
+Check available versions:
+
+helm search repo eks/aws-load-balancer-controller --versions | head
+
+AWS's current documented Helm chart installation uses chart version 1.14.0.
+
+Install:
+
+helm install aws-load-balancer-controller \
+  eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName="$CLUSTER_NAME" \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --version 1.14.0
+
+Step 11 — Verify Controller
+
+Run:
+
+kubectl get deployment \
+  aws-load-balancer-controller \
+  -n kube-system
+
+Expected:
+
+NAME                           READY   UP-TO-DATE   AVAILABLE
+aws-load-balancer-controller   2/2     2            2
+
+Also:
+
+kubectl get pods -n kube-system | grep aws-load-balancer
+
+Expected:
+
+aws-load-balancer-controller-xxxxx   1/1   Running
+aws-load-balancer-controller-xxxxx   1/1   Running
+
+This 2/2 deployment state is the verification AWS documents for a Helm installation.
+
+Step 12 — Check controller logs
+kubectl logs \
+  -n kube-system \
+  deployment/aws-load-balancer-controller \
+  --tail=100
+
+You don't want:
+
+AccessDenied
+AssumeRoleWithWebIdentity
+Unauthorized
+
+If you see:
+
+AccessDenied: not authorized to perform sts:AssumeRoleWithWebIdentity
+
+then the IAM/OIDC configuration needs fixing.
+
+Step 13 — Verify your UI Service
+
+Run:
+
+kubectl get svc ui -n retail
+
+You should have something like:
+
+NAME   TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)
+ui     ClusterIP  172.20.x.x      <none>        8080/TCP
+
+Keep it as ClusterIP.
+
+Don't change it to LoadBalancer.
+
+The ALB will be created from the Ingress.
+
+Step 14 — Test UI internally first
+
+Before ALB, verify:
+
+kubectl run curl-test \
+  -n retail \
+  --rm \
+  -it \
+  --image=curlimages/curl \
+  --restart=Never \
+  -- curl -v http://ui:8080/actuator/health
+
+Expected:
+
+HTTP/1.1 200 OK
+
+and something like:
+
+{"status":"UP"}
+
+If this works, your Kubernetes UI Service is ready.
+
+Step 15 — Create ALB Ingress
+
+Create:
+
+k8s/ingress/retail-ingress.yaml
+
+Use:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: retail-ingress
+  namespace: retail
+
+  annotations:
+
+    # Internet-facing ALB
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # Send traffic directly to Pod IPs
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # ALB HTTP listener
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+
+    # UI health check
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+
+    alb.ingress.kubernetes.io/success-codes: "200"
+
+spec:
+
+  ingressClassName: alb
+
+  rules:
+
+    - host: retail.yourdomain.com
+
+      http:
+
+        paths:
+
+          - path: /
+
+            pathType: Prefix
+
+            backend:
+
+              service:
+                name: ui
+                port:
+                  number: 8080
+
+The AWS Load Balancer Controller creates an ALB when it sees this Kubernetes Ingress.
+
+Step 16 — Apply Ingress
+kubectl apply -f k8s/ingress/retail-ingress.yaml
+
+Then:
+
+kubectl get ingress -n retail
+
+Initially:
+
+NAME             CLASS   HOSTS                    ADDRESS   PORTS
+retail-ingress   alb     retail.yourdomain.com              80
+
+Wait:
+
+kubectl get ingress -n retail -w
+
+After a few minutes you should get:
+
+NAME             CLASS   HOSTS                    ADDRESS
+retail-ingress   alb     retail.yourdomain.com   k8s-retail-xxxx.us-east-1.elb.amazonaws.com
+
+The controller provisions the AWS ALB and target groups based on the Ingress configuration.
+
+Step 16 — Apply Ingress
+kubectl apply -f k8s/ingress/retail-ingress.yaml
+
+Then:
+
+kubectl get ingress -n retail
+
+Initially:
+
+NAME             CLASS   HOSTS                    ADDRESS   PORTS
+retail-ingress   alb     retail.yourdomain.com              80
+
+Wait:
+
+kubectl get ingress -n retail -w
+
+After a few minutes you should get:
+
+NAME             CLASS   HOSTS                    ADDRESS
+retail-ingress   alb     retail.yourdomain.com   k8s-retail-xxxx.us-east-1.elb.amazonaws.com
+
+The controller provisions the AWS ALB and target groups based on the Ingress configuration.
+
+
+Step 17 — Get ALB DNS name
+
+Run:
+
+kubectl get ingress retail-ingress \
+  -n retail \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+Example:
+
+k8s-retail-123456789.us-east-1.elb.amazonaws.com
+
+Save it:
+
+export ALB_DNS=$(kubectl get ingress retail-ingress \
+  -n retail \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+Check:
+
+echo $ALB_DNS
+Step 18 — Test ALB before DNS
+
+Because your Ingress has a hostname:
+
+host: retail.yourdomain.com
+
+test using:
+
+curl -H "Host: retail.yourdomain.com" \
+http://$ALB_DNS/
+
+For example:
+
+curl -v \
+  -H "Host: retail.devopstechz.store" \
+  http://$ALB_DNS/
+
+If the UI returns a response, your ALB → Ingress → UI path is working.
+
+Step 19 — Check ALB target health
+
+This is very important.
+
+Get the target groups:
+
+aws elbv2 describe-target-groups \
+  --region us-east-1
+
+Then:
+
+aws elbv2 describe-target-health \
+  --target-group-arn YOUR_TARGET_GROUP_ARN \
+  --region us-east-1
+
+You want:
+
+State: healthy
+
+The ALB health check is checking:
+
+/actuator/health
+
+on your UI Pod.
+
+The controller supports configuring health-check path/port through Ingress annotations.
+
+Step 20 — Configure DNS
+
+Suppose you want:
+
+retail.devopstechz.store
+
+Your architecture becomes:
+
+Browser
+   |
+   | https://retail.devopstechz.store
+   |
+   v
+Route 53 / DNS
+   |
+   v
+AWS ALB
+   |
+   v
+Kubernetes Ingress
+   |
+   v
+ui:8080
+   |
+   v
+UI Pod
+
+Create a DNS record pointing your hostname to the ALB.
+
+If using Route 53, preferably use an Alias record to the ALB.
+
+If your DNS is managed somewhere else, use the DNS provider's supported ALB/CNAME configuration.
+
+Step 21 — Test from your browser
+
+Open:
+
+http://retail.yourdomain.com
+
+You should reach your UI.
+
+Then test the actual application:
+
+1. Open application
+       ↓
+2. Catalog loads
+       ↓
+3. Add product/item
+       ↓
+4. Cart works
+       ↓
+5. Checkout works
+       ↓
+6. Order submission works
+
+This tests the complete path:
+
+
+
+Create ACM certificate
+
+Go to:
+
+AWS Console → Certificate Manager (ACM)
+
+Make sure you select:
+
+Region: us-east-1
+
+This is important because your ALB is in us-east-1.
+
+Choose:
+
+Request certificate
+
+Select:
+
+Public certificate
+
+Domain:
+
+retail.metatechz.store
+
+For validation:
+
+DNS validation
+
+AWS recommends DNS validation for ACM public certificates.
+
+Part 9 — Validate ACM certificate
+
+If using Route 53, ACM can offer:
+
+Create records in Route 53
+
+and create the required CNAME automatically.
+
+If using Hostinger, ACM will give you something like:
+
+Name:
+_xxxxxxxxxxxxx.retail.metatechz.store
+
+Type:
+CNAME
+
+Value:
+_xxxxxxxxxxxxx.acm-validations.aws
+
+Create that CNAME in Hostinger DNS.
+
+ACM uses this CNAME to verify that you control the domain.
+
+Wait until ACM says:
+
+Status: Issued
+Part 10 — Add HTTPS to your Ingress
+
+Once ACM gives you the certificate ARN, for example:
+
+arn:aws:acm:us-east-1:302524629943:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx
+
+Update your Ingress:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: retail-ingress
+  namespace: retail
+
+  annotations:
+
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    alb.ingress.kubernetes.io/target-type: ip
+
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:302524629943:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx
+
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+
+    alb.ingress.kubernetes.io/success-codes: "200"
+
+spec:
+
+  ingressClassName: alb
+
+  rules:
+
+    - host: retail.metatechz.store
+
+      http:
+
+        paths:
+
+          - path: /
+
+            pathType: Prefix
+
+            backend:
+
+              service:
+                name: ui
+                port:
+                  number: 80
+
+Notice the important part:
+
+alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+
+and:
+
+alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+So:
+
+HTTP :80
+   |
+   v
+redirect
+   |
+   v
+HTTPS :443
+Part 11 — Apply the Ingress
+kubectl apply -f k8s/ingress/retail-ingress.yaml
+
+Check:
+
+kubectl describe ingress retail-ingress -n retail
+
+You should eventually see listeners for:
+
+80
+443
+Part 12 — Test HTTPS
+
+First:
+
+curl -v https://retail.metatechz.store
+
+Then:
+
+curl -I http://retail.metatechz.store
+
+The HTTP request should redirect to HTTPS.
+
+Finally open:
+
+https://retail.metatechz.store
+
+in your browser.
