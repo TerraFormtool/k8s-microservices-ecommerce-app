@@ -146,6 +146,19 @@ jobs:
 
           kubectl get namespace retail
 
+      #########################################################
+      # STORAGE CLASS
+      #########################################################
+
+      - name: Apply StorageClass
+
+        run: |
+
+          kubectl apply \
+           -f k8s/storage/storageclass.yaml
+
+        
+
 
       #########################################################
       # STORAGE
