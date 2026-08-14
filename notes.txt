@@ -516,6 +516,12 @@ aws elbv2 describe-target-health \
   --target-group-arn YOUR_TARGET_GROUP_ARN \
   --region us-east-1
 
+example:-
+
+aws elbv2 describe-target-health \
+  --target-group-arn "arn:aws:elasticloadbalancing:us-east-1:302524629943:targetgroup/k8s-retail-ui-     f199cf9bce/4652b570867290a3" \
+  --region us-east-1
+
 You want:
 
 State: healthy
