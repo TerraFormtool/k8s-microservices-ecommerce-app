@@ -120,6 +120,135 @@ annotations:
   eks.amazonaws.com/role-arn: arn:aws:iam::...
 
 
+if any error occurs or empty then follow below steps 
+
+What I want you to run now
+
+Run these four commands and paste the complete output:
+
+Command 1
+eksctl get iamserviceaccount \
+  --cluster "$CLUSTER_NAME" \
+  --region "$AWS_REGION"
+Command 2
+aws cloudformation list-stacks \
+  --region "$AWS_REGION" \
+  --query 'StackSummaries[?contains(StackName, `aws-load-balancer-controller`) || contains(StackName, `iamserviceaccount`)].{Name:StackName,Status:StackStatus}' \
+  --output table
+Command 3
+aws iam list-roles \
+  --query 'Roles[?contains(RoleName, `load-balancer-controller`) || contains(RoleName, `LoadBalancerController`)].{RoleName:RoleName,Arn:Arn}' \
+  --output table
+Command 4
+eksctl get iamserviceaccount \
+  --cluster "$CLUSTER_NAME" \
+  --region "$AWS_REGION" \
+  -o yaml
+
+
+Step 1 — Get the existing role ARN
+
+You already have it:
+
+arn:aws:iam::302524629943:role/eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC
+
+Set it:
+
+export LBC_ROLE_ARN="arn:aws:iam::302524629943:role/eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC"
+
+Verify the role exists:
+
+aws iam get-role \
+  --role-name eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC
+Step 2 — Manually recreate the Kubernetes ServiceAccount
+
+Since the IAM role already exists, create the missing Kubernetes ServiceAccount yourself.
+
+Run:
+
+kubectl create serviceaccount \
+  aws-load-balancer-controller \
+  -n kube-system
+
+Then annotate it:
+
+kubectl annotate serviceaccount \
+  aws-load-balancer-controller \
+  -n kube-system \
+  eks.amazonaws.com/role-arn="$LBC_ROLE_ARN" \
+  --overwrite
+
+This is the standard IRSA relationship:
+
+Kubernetes ServiceAccount
+        |
+        | annotation
+        v
+IAM Role
+        |
+        v
+AWSLoadBalancerControllerIAMPolicy
+
+AWS documents this ServiceAccount-to-IAM-role annotation mechanism for IRSA.
+
+Step 3 — Verify it
+
+Run:
+
+kubectl get sa aws-load-balancer-controller -n kube-system
+
+Then:
+
+kubectl get sa aws-load-balancer-controller \
+  -n kube-system \
+  -o yaml
+
+You must see:
+
+annotations:
+  eks.amazonaws.com/role-arn: arn:aws:iam::302524629943:role/...
+
+Or simply:
+
+kubectl get sa aws-load-balancer-controller \
+  -n kube-system \
+  -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}'
+
+Expected:
+
+arn:aws:iam::302524629943:role/eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC
+Step 4 — Verify the IAM trust policy
+
+This is very important before installing the controller.
+
+Run:
+
+aws iam get-role \
+  --role-name eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC \
+  --query 'Role.AssumeRolePolicyDocument'
+
+You should find a trust relationship allowing:
+
+sts:AssumeRoleWithWebIdentity
+
+and the subject should correspond to:
+
+system:serviceaccount:kube-system:aws-load-balancer-controller
+
+AWS requires the IAM role trust policy to reference the cluster's OIDC provider and the specific Kubernetes ServiceAccount.
+
+If you want a cleaner check
+
+Run:
+
+aws iam get-role \
+  --role-name eksctl-prod-eks-addon-iamserviceaccount-kube--Role1-jxgy2Okh43hC \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+
+Paste that output if you want me to verify it.
+
+
+
 Step 10 — Install Helm chart
 
 Add AWS's EKS chart repository:
