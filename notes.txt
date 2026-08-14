@@ -496,8 +496,8 @@ http://$ALB_DNS/
 For example:
 
 curl -v \
-  -H "Host: retail.devopstechz.store" \
-  http://$ALB_DNS/
+  -H "Host: retail.metatechz.store" \
+  "http://$ALB/"
 
 If the UI returns a response, your ALB → Ingress → UI path is working.
 
