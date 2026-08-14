@@ -1,0 +1,12 @@
+# k8s/istio/gateway-pdb.yaml
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: istio-ingressgateway
+  namespace: istio-ingress
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      istio: ingressgateway
