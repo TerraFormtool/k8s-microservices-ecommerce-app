@@ -1225,3 +1225,430 @@ You should see ports similar to:
 80:xxxxx/TCP
 443:xxxxx/TCP
 15021:xxxxx/TCP
+
+
+Step 3 — Enable Istio sidecar injection
+
+Your namespace is correctly:
+
+retail
+
+Run:
+
+kubectl label namespace retail istio-injection=enabled --overwrite
+
+Verify:
+
+kubectl get namespace retail --show-labels
+
+kubectl get namespace retail -L istio-injection
+
+You should see:
+
+istio-injection=enabled
+
+
+Step 4 — Restart your application deployments
+
+Your attachment has these five applications:
+
+ui
+catalog
+cart
+checkout
+orders
+
+Restart them:
+
+kubectl rollout restart deployment/ui -n retail
+kubectl rollout restart deployment/catalog -n retail
+kubectl rollout restart deployment/cart -n retail
+kubectl rollout restart deployment/checkout -n retail
+kubectl rollout restart deployment/orders -n retail
+
+Now:
+
+kubectl get pods -n retail
+
+Previously:
+
+ui-xxx          1/1
+catalog-xxx     1/1
+cart-xxx        1/1
+checkout-xxx    1/1
+orders-xxx      1/1
+
+After Istio:
+
+ui-xxx          2/2
+catalog-xxx     2/2
+cart-xxx        2/2
+checkout-xxx    2/2
+orders-xxx      2/2
+
+The second container is:
+
+istio-proxy
+
+Verify:
+
+kubectl get pod -n retail
+
+and:
+
+kubectl describe pod <ui-pod> -n retail
+
+You should see:
+
+istio-proxy
+
+
+tep 5 — Create the Istio Gateway
+
+Create this directory:
+
+k8s/istio/
+
+Then create:
+
+k8s/istio/gateway.yaml
+
+Use:
+
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: retail-gateway
+  namespace: retail
+spec:
+  selector:
+    istio: ingressgateway
+
+
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+
+
+      hosts:
+        - retail.metatechz.store
+
+Apply:
+
+kubectl apply -f k8s/istio/gateway.yaml
+
+Verify:
+
+kubectl get gateway -n retail
+
+Expected:
+
+NAME             AGE
+retail-gateway   ...
+
+
+Step 6 — Create the Istio VirtualService
+
+Create:
+
+k8s/istio/virtualservice-ui.yaml
+
+Use:
+
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: retail-ui
+  namespace: retail
+spec:
+  hosts:
+    - retail.metatechz.store
+
+
+  gateways:
+    - retail-gateway
+
+
+  http:
+    - match:
+        - uri:
+            prefix: /
+
+
+      route:
+        - destination:
+            host: ui
+            port:
+              number: 80
+
+Apply:
+
+kubectl apply -f k8s/istio/virtualservice-ui.yaml
+
+Check:
+
+kubectl get virtualservice -n retail
+
+You should see:
+
+NAME         GATEWAYS
+retail-ui    retail-gateway
+
+
+Now the critical change — your AWS ALB Ingress
+
+Your current file is:
+
+k8s/ingress/retail-ingress.yaml
+
+Currently it contains:
+
+backend:
+  service:
+    name: ui
+    port:
+      number: 80
+
+That is wrong for the architecture you want.
+
+We need:
+
+AWS ALB
+   ↓
+istio-ingressgateway
+
+instead.
+
+11. Replace your existing ALB Ingress
+
+Change your k8s/ingress/retail-ingress.yaml to:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: retail-istio-alb
+  namespace: istio-system
+
+
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+
+
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz/ready
+    alb.ingress.kubernetes.io/healthcheck-port: "15021"
+    alb.ingress.kubernetes.io/success-codes: "200"
+
+
+spec:
+  ingressClassName: alb
+
+
+  rules:
+    - host: retail.metatechz.store
+
+
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+
+
+            backend:
+              service:
+                name: istio-ingressgateway
+                port:
+                  number: 80
+Notice the important differences.
+
+Old:
+
+namespace: retail
+
+
+service:
+  name: ui
+
+New:
+
+namespace: istio-system
+
+
+service:
+  name: istio-ingressgateway
+
+
+Why is the ALB Ingress in istio-system?
+
+Because your Istio ingress gateway Service is normally in:
+
+istio-system
+
+So the ALB Ingress needs to reference:
+
+istio-ingressgateway
+
+in the same namespace.
+
+This gives us:
+
+AWS ALB
+    |
+    v
+istio-ingressgateway
+    |
+    v
+Istio Gateway
+13. Apply the ALB Ingress
+
+Now you should apply the Ingress, because this is no longer the old application ingress.
+
+Run:
+
+kubectl apply -f k8s/ingress/retail-ingress.yaml
+
+Then:
+
+kubectl get ingress -n istio-system
+
+You should eventually see:
+
+NAME                CLASS   HOSTS                    ADDRESS
+retail-istio-alb    alb     retail.metatechz.store   xxxx.elb.amazonaws.com
+
+The AWS ALB will take some time to provision.
+
+Check:
+
+kubectl describe ingress retail-istio-alb -n istio-system
+
+Look at the Events section if there is a problem.
+
+
+Your complete request flow now
+
+This is exactly what you asked for:
+
+                  INTERNET
+                     |
+                     v
+          retail.metatechz.store
+                     |
+                     v
+              +-------------+
+              |   AWS ALB   |
+              +------+------+
+                     |
+                     | HTTP :80
+                     v
+       +---------------------------+
+       | Istio Ingress Gateway     |
+       |       Envoy Proxy         |
+       +-------------+-------------+
+                     |
+                     v
+             Istio Gateway
+                     |
+                     v
+            VirtualService
+                     |
+                     v
+                 ui:80
+                     |
+                     v
+             +---------------+
+             | UI Pod        |
+             |               |
+             | UI Container   |
+             | Istio Envoy    |
+             +-------+-------+
+                     |
+                     |
+          Istio Service Mesh
+                     |
+        +------------+------------+
+        |            |            |
+        v            v            v
+     Catalog        Cart       Checkout
+      +Envoy       +Envoy       +Envoy
+        |            |            |
+        v            v            v
+      MySQL       DynamoDB       Redis
+
+
+                     |
+                     v
+                   Orders
+                  +Envoy
+                     |
+              +------+------+
+              |             |
+              v             v
+          PostgreSQL     RabbitMQ
+15. What happens when a user opens the website?
+
+Suppose the user opens:
+
+http://retail.metatechz.store
+
+The request travels:
+
+Browser
+   ↓
+DNS
+   ↓
+AWS ALB
+   ↓
+istio-ingressgateway Service
+   ↓
+Istio Envoy
+   ↓
+retail-gateway
+   ↓
+retail-ui VirtualService
+   ↓
+ui Service
+   ↓
+UI Pod
+
+The UI Pod has:
+
+UI container
++
+istio-proxy
+
+So the request ultimately reaches the UI application through the Istio mesh.
+
+16. What about UI → Catalog?
+
+Your uploaded project already has the UI configuration pointing to services such as:
+
+http://catalog:8080
+http://cart:8080
+http://checkout:8080
+http://orders:8080
+
+You don't need to change those URLs just because you're adding Istio.
+
+The traffic becomes:
+
+UI application
+      |
+      v
+UI Envoy
+      |
+      v
+Catalog Envoy
+      |
+      v
+Catalog application
+
+This is where the service mesh starts providing value.
+
+Add istio ingress DNS and test the application
+
