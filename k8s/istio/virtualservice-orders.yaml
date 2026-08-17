@@ -1,0 +1,20 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orders
+  namespace: retail
+spec:
+  hosts:
+    - orders
+
+  http:
+    - route:
+        - destination:
+            host: orders
+            subset: v1
+          weight: 90
+
+        - destination:
+            host: orders
+            subset: v2
+          weight: 10
