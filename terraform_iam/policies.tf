@@ -105,7 +105,8 @@ resource "aws_iam_user_policy" "app_01_policy" {
           "cloudformation:DescribeStackEvents",
           "cloudformation:DescribeStackResources",
           "cloudformation:GetTemplate",
-          "cloudformation:ListStackResources"
+          "cloudformation:ListStackResources",
+          "cloudformation:UpdateTerminationProtection"
         ]
 
         Resource = "*"
