@@ -1,21 +1,19 @@
-# k8s/istio/gateway.yaml
-
 apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: retail-gateway
   namespace: retail
-
 spec:
   selector:
     istio: ingressgateway
 
-  servers:
 
+  servers:
     - port:
         number: 80
         name: http
         protocol: HTTP
+
 
       hosts:
         - retail.metatechz.store
