@@ -1,47 +1,87 @@
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+
+# metadata:
+#   name: retail-ingress
+#   namespace: retail
+
+#   annotations:
+
+#     # Internet-facing ALB
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+
+#     # Send traffic directly to Pod IPs
+#     alb.ingress.kubernetes.io/target-type: ip
+
+#     # ALB HTTP listener
+#     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+
+#     # UI health check
+#     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+
+#     alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+
+#     alb.ingress.kubernetes.io/success-codes: "200"
+
+# spec:
+
+#   ingressClassName: alb
+
+#   rules:
+
+#     - host: retail.metatechz.store
+
+#       http:
+
+#         paths:
+
+#           - path: /
+
+#             pathType: Prefix
+
+#             backend:
+
+#               service:
+#                 name: ui
+#                 port:
+#                   number: 80
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
-
 metadata:
-  name: retail-ingress
-  namespace: retail
+  name: retail-istio-alb
+  namespace: istio-system
+
 
   annotations:
-
-    # Internet-facing ALB
     alb.ingress.kubernetes.io/scheme: internet-facing
-
-    # Send traffic directly to Pod IPs
     alb.ingress.kubernetes.io/target-type: ip
 
-    # ALB HTTP listener
+
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
 
-    # UI health check
-    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
 
-    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
-
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz/ready
+    alb.ingress.kubernetes.io/healthcheck-port: "15021"
     alb.ingress.kubernetes.io/success-codes: "200"
 
-spec:
 
+spec:
   ingressClassName: alb
 
-  rules:
 
+  rules:
     - host: retail.metatechz.store
 
+
       http:
-
         paths:
-
           - path: /
-
             pathType: Prefix
 
-            backend:
 
+            backend:
               service:
-                name: ui
+                name: istio-ingressgateway
                 port:
                   number: 80
