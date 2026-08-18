@@ -49,7 +49,7 @@ node_instance_types = [
 ]
 
 node_min_size     = 2
-node_desired_size = 2
+node_desired_size = 3
 node_max_size     = 5
 
 ############################################
