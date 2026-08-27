@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-v2
+  namespace: retail
+
+  labels:
+    app: orders
+
+spec:
+
+  replicas: 1
+
+  revisionHistoryLimit: 5
+
+  strategy:
+
+    type: RollingUpdate
+
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: orders
+      version: v2
+
+  template:
+
+    metadata:
+      labels:
+        app: orders
+        version: v2
+
+    spec:
+
+      terminationGracePeriodSeconds: 30
+
+      topologySpreadConstraints:
+
+        - maxSkew: 1
+
+          topologyKey: topology.kubernetes.io/zone
+
+          whenUnsatisfiable: ScheduleAnyway
+
+          labelSelector:
+            matchLabels:
+              app: orders
+
+      affinity:
+
+        podAntiAffinity:
+
+          preferredDuringSchedulingIgnoredDuringExecution:
+
+            - weight: 100
+
+              podAffinityTerm:
+
+                topologyKey: kubernetes.io/hostname
+
+                labelSelector:
+                  matchLabels:
+                    app: orders
+
+      containers:
+
+        - name: orders
+
+          image: 302524629943.dkr.ecr.us-east-1.amazonaws.com/orders:latest
+
+          imagePullPolicy: Always
+
+          ports:
+
+            - name: http
+              containerPort: 8080
+
+          envFrom:
+
+            - configMapRef:
+                name: orders-config
+
+          env:
+
+            - name: RETAIL_ORDERS_PERSISTENCE_PASSWORD
+
+              valueFrom:
+                secretKeyRef:
+                  name: retail-secrets
+                  key: DB_PASSWORD
+
+            - name: RETAIL_ORDERS_MESSAGING_RABBITMQ_PASSWORD
+
+              valueFrom:
+                secretKeyRef:
+                  name: retail-secrets
+                  key: RABBITMQ_PASSWORD
+
+          resources:
+
+            requests:
+              cpu: 100m
+              memory: 256Mi
+
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          startupProbe:
+
+            httpGet:
+              path: /actuator/health
+              port: http
+
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+          readinessProbe:
+
+            httpGet:
+              path: /actuator/health
+              port: http
+
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+
+            httpGet:
+              path: /actuator/health
+              port: http
+
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          lifecycle:
+
+            preStop:
+
+              exec:
+
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 10
