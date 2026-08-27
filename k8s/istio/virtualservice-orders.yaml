@@ -6,15 +6,18 @@ metadata:
 spec:
   hosts:
     - orders
-
   http:
     - route:
         - destination:
             host: orders
             subset: v1
+            port:
+              number: 80
           weight: 90
 
         - destination:
             host: orders
             subset: v2
+            port:
+              number: 80
           weight: 10
