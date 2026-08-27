@@ -1652,3 +1652,297 @@ This is where the service mesh starts providing value.
 
 Add istio ingress DNS and test the application
 
+==============================================================================================================================
+Now testing istio here are the steps
+===============================================================================================================================
+
+Stage 3 — Create Orders v1/v2
+
+This is where your actual Istio canary practice starts.
+
+Currently you have:
+
+orders
+   |
+   +--- orders application
+
+We need:
+
+                 Orders Service
+                       |
+              +--------+--------+
+              |                 |
+              v                 v
+         Orders v1          Orders v2
+          version:v1         version:v2
+Create Orders v1 Deployment
+
+You can use your existing Orders deployment as v1.
+
+The important part is:
+
+metadata:
+  labels:
+    app: orders
+    version: v1
+
+For example:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-v1
+  namespace: retail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: orders
+        version: v1
+    spec:
+      containers:
+        - name: orders
+          image: YOUR_ORDERS_IMAGE
+          ports:
+            - containerPort: 8080
+Stage 4 — Create Orders v2
+
+Now create a second Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-v2
+  namespace: retail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: orders
+        version: v2
+    spec:
+      containers:
+        - name: orders
+          image: YOUR_ORDERS_V2_IMAGE
+          ports:
+            - containerPort: 8080
+
+The critical difference is:
+
+version: v1
+
+versus:
+
+version: v2
+
+And ideally v2 should have a visible application change so you can tell which version received the request.
+
+For example:
+
+Orders Service - VERSION 1
+
+versus:
+
+Orders Service - VERSION 2
+
+This makes your canary testing much easier.
+
+Stage 5 — Verify both versions
+
+Apply:
+
+kubectl apply -f orders-v1.yaml
+kubectl apply -f orders-v2.yaml
+
+Check:
+
+kubectl get pods -n retail -l app=orders --show-labels
+
+You want:
+
+orders-v1-xxxxx   2/2   Running   ...   app=orders,version=v1
+orders-v2-xxxxx   2/2   Running   ...   app=orders,version=v2
+
+Because Istio is enabled, each should have:
+
+2/2
+
+meaning:
+
+orders application
+istio-proxy
+Stage 6 — Create the Orders Service
+
+You need one stable Service:
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  namespace: retail
+spec:
+  selector:
+    app: orders
+  ports:
+    - port: 80
+      targetPort: 8080
+
+Notice:
+
+selector:
+  app: orders
+
+It does not contain:
+
+version: v1
+
+because we want the Service to see both versions.
+
+Therefore:
+
+orders Service
+      |
+      +-------- orders v1
+      |
+      +-------- orders v2
+Stage 7 — DestinationRule
+
+Now create exactly the file you listed:
+
+destinationrule-orders.yaml
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: orders
+  namespace: retail
+spec:
+  host: orders
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+
+    - name: v2
+      labels:
+        version: v2
+
+Apply:
+
+kubectl apply -f destinationrule-orders.yaml
+
+Verify:
+
+kubectl get destinationrule -n retail
+
+And:
+
+kubectl describe destinationrule orders -n retail
+
+Conceptually:
+
+orders
+   |
+   +--- subset v1 → version=v1
+   |
+   +--- subset v2 → version=v2
+Stage 8 — Canary 90/10 VirtualService
+
+Now create:
+
+virtualservice-orders.yaml
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orders
+  namespace: retail
+spec:
+  hosts:
+    - orders
+  http:
+    - route:
+        - destination:
+            host: orders
+            subset: v1
+            port:
+              number: 80
+          weight: 90
+
+        - destination:
+            host: orders
+            subset: v2
+            port:
+              number: 80
+          weight: 10
+
+Apply:
+
+kubectl apply -f virtualservice-orders.yaml
+
+Verify:
+
+kubectl get virtualservice orders -n retail
+
+What you have now
+
+Traffic to:
+
+http://orders
+
+will be handled approximately:
+
+                 orders Service
+                       |
+                  Istio Envoy
+                       |
+             +---------+---------+
+             |                   |
+            90%                 10%
+             |                   |
+             v                   v
+         Orders v1           Orders v2
+
+This is your canary deployment.
+
+Stage 9 — Test the 90/10 canary
+
+This is very important: don't just apply the YAML and assume it works.
+
+From the UI Pod, for example:
+
+kubectl exec -n retail deploy/ui -c ui -- \
+  curl -s http://orders
+
+Run it multiple times:
+
+for i in {1..100}; do
+  kubectl exec -n retail deploy/ui -c ui -- \
+    curl -s http://orders
+done
+
+If your v1/v2 responses are visibly different, you can count them.
+
+For example:
+
+Orders v1
+Orders v1
+Orders v2
+Orders v1
+Orders v1
+...
+
+Over many requests, you should see approximately:
+
+v1 ≈ 90%
+v2 ≈ 10%
+
+It won't necessarily be exactly 90/10 over 10 or 20 requests.
