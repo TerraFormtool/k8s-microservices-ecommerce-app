@@ -6,18 +6,12 @@ metadata:
 spec:
   hosts:
     - retail.metatechz.store
-
-
   gateways:
     - retail-gateway
-
-
   http:
     - match:
         - uri:
             prefix: /
-
-
       route:
         - destination:
             host: ui
