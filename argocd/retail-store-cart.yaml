@@ -1,26 +1,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: retail-store-cart
+  name: retail-ecommerce
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: retail-store
-  source: 
-    repoURL: https://github.com/arumullayaswanth/k8s-microservices-ecommerce-app
+  project: default
+
+  source:
+    repoURL: https://github.com/TerraFormtool/k8s-microservices-ecommerce-app.git
     targetRevision: main
-    path: src/cart/chart
-    helm:
-      valueFiles:
-        - values.yaml
+    path: k8s/cart
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: retail-store
+    namespace: retail
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true 
+      - CreateNamespace=true
