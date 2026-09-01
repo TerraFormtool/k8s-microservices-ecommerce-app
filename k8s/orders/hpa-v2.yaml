@@ -1,0 +1,29 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orders-v2
+  namespace: retail
+
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orders-v2
+
+  minReplicas: 1
+  maxReplicas: 8
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+
+    scaleDown:
+      stabilizationWindowSeconds: 300
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
