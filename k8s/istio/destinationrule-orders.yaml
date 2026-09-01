@@ -5,15 +5,10 @@
 #   namespace: retail
 # spec:
 #   host: orders
-#   subsets:
-#     - name: v1
-#       labels:
-#         version: v1
 
-#     - name: v2
-#       labels:
-#         version: v2
-
+#   trafficPolicy:
+#     loadBalancer:
+#       simple: ROUND_ROBIN
 
 apiVersion: networking.istio.io/v1
 kind: DestinationRule
@@ -22,6 +17,17 @@ metadata:
   namespace: retail
 spec:
   host: orders
+
+  subsets:
+    - name: v1
+      labels:
+        app: orders
+        version: v1
+
+    - name: v2
+      labels:
+        app: orders
+        version: v2
 
   trafficPolicy:
     loadBalancer:
