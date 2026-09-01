@@ -1,22 +1,61 @@
 # k8s/istio/gateway-hpa.yaml
 
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: istio-ingressgateway
+#   namespace: istio-ingress
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: istio-ingressgateway
+
+#   minReplicas: 2
+#   maxReplicas: 5
+
+#   behavior:
+#     scaleUp:
+#       stabilizationWindowSeconds: 60
+#       policies:
+#         - type: Percent
+#           value: 100
+#           periodSeconds: 60
+
+#     scaleDown:
+#       stabilizationWindowSeconds: 300
+#       policies:
+#         - type: Percent
+#           value: 25
+#           periodSeconds: 60
+
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 60
+
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: istio-ingressgateway
-  namespace: istio-ingress
+  namespace: istio-system
+
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: istio-ingressgateway
 
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 5
 
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 0
       policies:
         - type: Percent
           value: 100
@@ -26,7 +65,7 @@ spec:
       stabilizationWindowSeconds: 300
       policies:
         - type: Percent
-          value: 25
+          value: 50
           periodSeconds: 60
 
   metrics:
@@ -35,4 +74,4 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 60
+          averageUtilization: 80
