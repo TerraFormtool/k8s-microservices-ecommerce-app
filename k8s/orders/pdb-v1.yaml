@@ -1,0 +1,28 @@
+# apiVersion: policy/v1
+# kind: PodDisruptionBudget
+# metadata:
+#   name: orders
+#   namespace: retail
+
+# spec:
+
+#   minAvailable: 1
+
+#   selector:
+#     matchLabels:
+#       app: orders
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+
+metadata:
+  name: orders-v1
+  namespace: retail
+
+spec:
+  minAvailable: 1
+
+  selector:
+    matchLabels:
+      app: orders
+      version: v1
