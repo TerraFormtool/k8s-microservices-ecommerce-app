@@ -1,3 +1,27 @@
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: retail-cart
+#   namespace: argocd
+
+# spec:
+#   project: default
+
+#   source:
+#     repoURL: https://github.com/TerraFormtool/k8s-microservices-ecommerce-app.git
+#     targetRevision: main
+#     path: k8s/cart
+
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: retail
+
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -16,7 +40,17 @@ spec:
     server: https://kubernetes.default.svc
     namespace: retail
 
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: cart
+      jsonPointers:
+        - /spec/replicas
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+
+    syncOptions:
+      - RespectIgnoreDifferences=true
