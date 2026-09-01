@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istiod
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - istio-system
+
+  selector:
+    matchLabels:
+      app: istiod
+
+  endpoints:
+    - port: http-monitoring
+      interval: 15s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-ingressgateway
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - istio-system
+
+  selector:
+    matchLabels:
+      app: istio-ingressgateway
+
+  endpoints:
+    - port: http-envoy-prom
+      interval: 15s
+      path: /stats/prometheus
