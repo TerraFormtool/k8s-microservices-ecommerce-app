@@ -23,6 +23,31 @@
 #           weight: 10
 
 
+# apiVersion: networking.istio.io/v1
+# kind: VirtualService
+# metadata:
+#   name: orders
+#   namespace: retail
+# spec:
+#   hosts:
+#     - orders
+
+#   http:
+#     - route:
+#         - destination:
+#             host: orders
+#             subset: v1
+#             port:
+#               number: 8080
+#           weight: 90
+
+#         - destination:
+#             host: orders
+#             subset: v2
+#             port:
+#               number: 8080
+#           weight: 10
+
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
@@ -36,14 +61,5 @@ spec:
     - route:
         - destination:
             host: orders
-            subset: v1
             port:
-              number: 8080
-          weight: 90
-
-        - destination:
-            host: orders
-            subset: v2
-            port:
-              number: 8080
-          weight: 10
+              number: 80
