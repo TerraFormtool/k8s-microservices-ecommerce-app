@@ -1,1 +1,42 @@
 
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: retail-observability-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+
+    - name: retail-pod-alerts
+      rules:
+
+        - alert: RetailPodNotReady
+          expr: |
+            kube_pod_status_ready{
+              namespace="retail",
+              condition="true"
+            } == 0
+          for: 2m
+          labels:
+            severity: warning
+            team: devops
+          annotations:
+            summary: "Retail pod is not ready"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for more than 2 minutes."
+
+        - alert: RetailPodCrashLooping
+          expr: |
+            rate(
+              kube_pod_container_status_restarts_total{
+                namespace="retail"
+              }[5m]
+            ) > 0
+          for: 5m
+          labels:
+            severity: critical
+            team: devops
+          annotations:
+            summary: "Retail pod is restarting"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} is repeatedly restarting."
