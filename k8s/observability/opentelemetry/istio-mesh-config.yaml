@@ -1,0 +1,12 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: retail-istio
+  namespace: istio-system
+spec:
+  meshConfig:
+    extensionProviders:
+      - name: otel
+        opentelemetry:
+          service: otel-collector-opentelemetry-collector.observability.svc.cluster.local
+          port: 4317
