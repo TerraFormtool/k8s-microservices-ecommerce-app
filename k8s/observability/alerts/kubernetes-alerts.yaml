@@ -5,6 +5,7 @@ metadata:
   namespace: monitoring
   labels:
     release: monitoring
+
 spec:
   groups:
     - name: retail-pod-alerts
@@ -38,3 +39,20 @@ spec:
           annotations:
             summary: "Retail pod is restarting"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} is repeatedly restarting."
+
+        - alert: RetailHPAAtMaxReplicas
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{
+              namespace="retail"
+            }
+            >=
+            kube_horizontalpodautoscaler_spec_max_replicas{
+              namespace="retail"
+            }
+          for: 2m
+          labels:
+            severity: warning
+            team: devops
+          annotations:
+            summary: "Retail HPA has reached maximum replicas"
+            description: "HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler }} has reached its maximum replica count."
