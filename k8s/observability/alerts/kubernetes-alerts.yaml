@@ -56,3 +56,31 @@ spec:
           annotations:
             summary: "Retail HPA has reached maximum replicas"
             description: "HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler }} has reached its maximum replica count."
+
+        - alert: RetailHighCPU
+          expr: |
+            (
+              sum by (namespace, pod) (
+                rate(
+                  container_cpu_usage_seconds_total{
+                    namespace="retail",
+                    container!="",
+                    container!="POD"
+                  }[5m]
+                )
+              )
+              /
+              sum by (namespace, pod) (
+                kube_pod_container_resource_requests{
+                  namespace="retail",
+                  resource="cpu"
+                }
+              )
+            ) > 0.80
+          for: 2m
+          labels:
+            severity: warning
+            team: devops
+          annotations:
+            summary: "High CPU usage"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is using more than 80% of requested CPU."
