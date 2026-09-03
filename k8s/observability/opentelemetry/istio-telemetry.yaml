@@ -1,1 +1,10 @@
-
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: retail-tracing
+  namespace: retail
+spec:
+  tracing:
+    - providers:
+        - name: otel
+      randomSamplingPercentage: 100
