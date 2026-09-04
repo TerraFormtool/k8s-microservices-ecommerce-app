@@ -1,0 +1,42 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+
+metadata:
+  name: retail-istio
+  namespace: istio-system
+
+spec:
+  profile: default
+
+  meshConfig:
+    accessLogFile: /dev/stdout
+
+    enableTracing: true
+
+    extensionProviders:
+      - name: otel-tracing
+        opentelemetry:
+          service: otel-collector-opentelemetry-collector.observability.svc.cluster.local
+          port: 4317
+
+  components:
+
+    pilot:
+      enabled: true
+
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+
+  values:
+
+    pilot:
+      autoscaleEnabled: true
+      autoscaleMin: 1
+      autoscaleMax: 3
+
+    gateways:
+      istio-ingressgateway:
+        autoscaleEnabled: true
+        autoscaleMin: 1
+        autoscaleMax: 5
